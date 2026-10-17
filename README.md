@@ -95,8 +95,7 @@ Stop with `make down`. Logs: `make logs`.
 FieldSense/
 ├── backend/             # FastAPI, domain, analytics, ingestion, tests
 ├── frontend/            # Vite + React + Tailwind SPA
-├── docs/                # Architecture, ADRs, write-ups, answer pack
-├── scripts/             # Capture / report helpers (optional)
+├── docs/                # Architecture, ADRs
 ├── docker-compose.yml
 ├── Makefile
 └── .env.example
@@ -192,8 +191,6 @@ Read in order: `01-problem-statement.md` → `02-dataset-guide.md` → `03-evalu
 |---|---|
 | [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) | System design |
 | [`docs/KNOWN_LIMITATIONS.md`](./docs/KNOWN_LIMITATIONS.md) | Honest gaps |
-| [`docs/FieldSense_Writeup_Design_and_Results.docx`](./docs/FieldSense_Writeup_Design_and_Results.docx) | 2-page design + results write-up |
-| [`docs/FieldSense_Q1-Q18_System_Answers.docx`](./docs/FieldSense_Q1-Q18_System_Answers.docx) | Captured Q1–Q18 answers + screenshots |
 | [`docs/decisions/`](./docs/decisions/) | ADRs |
 
 ---

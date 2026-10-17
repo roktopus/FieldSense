@@ -90,10 +90,18 @@ submission/private/
 .chroma/
 .vector_cache/
 .venv-docs/
+
+# Local capture / report scripts and generated outputs (not part of the app)
+scripts/
 docs/scenario-capture/
+docs/FieldSense_Q1-Q18_System_Answers.doc
+docs/FieldSense_Q1-Q18_System_Answers.docx
+docs/FieldSense_Writeup_Design_and_Results.doc
+docs/FieldSense_Writeup_Design_and_Results.docx
 
 # Local scratch / OS
 *.orig
 *.bak
 .AppleDouble
 .LSOverride
+
