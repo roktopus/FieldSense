@@ -2,10 +2,13 @@
 
 Evidence-backed **Asset Intelligence Copilot** for oil-well operations — plain-English Q&A with inline visuals, shared knowledge, private memory, and formal corrections.
 
+**Repository:** [github.com/roktopus/FieldSense](https://github.com/roktopus/FieldSense/)
+
 Built for [FlytBase Hacktoberfest 2026](https://github.com/FlytBaseAILabs/flytbase-ahc-swe-asset-intelligence-dataset) (Apache-2.0).
 
 | | |
 |---|---|
+| **GitHub** | https://github.com/roktopus/FieldSense/ |
 | **UI** | http://localhost:5173 |
 | **API docs** | http://localhost:8000/docs |
 | **License** | [Apache-2.0](./LICENSE) |
