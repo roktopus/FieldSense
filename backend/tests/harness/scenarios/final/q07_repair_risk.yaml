@@ -1,5 +1,7 @@
 as_of: "2027-01-15T00:00:00Z"
 reset: true
+dataset:
+  min_wells: 500
 turns:
   - user_id: U-301
     session: new
@@ -11,12 +13,16 @@ turns:
       as evidence.
     expect:
       kind: table
+      rows_exact: 10
       row_fields: [rank, asset_id, area_name, operator_note_evidence, last_repair]
+      evidence_min: 1
   - user_id: U-301
     session: same
     session_key: robert_q7
     text: Which three would you send a crew to first this week, and why?
     expect:
       kind: short_answer
+      mentions_prior_asset: true
+      evidence_min: 1
       summary_contains:
         - "crew"

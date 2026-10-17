@@ -1,5 +1,7 @@
 as_of: "2027-01-15T00:00:00Z"
 reset: true
+dataset:
+  min_wells: 500
 turns:
   - user_id: U-601
     session: new
@@ -27,9 +29,13 @@ turns:
     text: Which recalled pumps are still in the ground right now?
     expect:
       kind: table
+      rows_min: 1
       row_fields: [asset_id, area_name, lot, provenance]
+      evidence_min: 1
       summary_contains:
         - "recalled"
+      summary_excludes:
+        - "thousands of dollars"
   - user_id: U-501
     session: new
     text: >
@@ -47,5 +53,9 @@ turns:
       to install each one.
     expect:
       kind: table
+      rows_min: 1
+      rows_lt_last_table: true
+      row_fields: [asset_id, area_name]
+      evidence_min: 1
       summary_contains:
         - "recalled"

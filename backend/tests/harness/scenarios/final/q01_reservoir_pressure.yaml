@@ -1,5 +1,7 @@
 as_of: "2027-01-15T00:00:00Z"
 reset: true
+dataset:
+  min_wells: 500
 turns:
   - user_id: U-201
     session: new
@@ -9,6 +11,9 @@ turns:
     expect:
       kind: short_answer
       coverage_status: unsupported
+      rows_empty: true
+      visuals_empty: true
+      evidence_max: 0
       summary_contains:
         - "cannot"
         - "pressure"

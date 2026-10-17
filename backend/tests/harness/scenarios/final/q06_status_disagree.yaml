@@ -1,5 +1,7 @@
 as_of: "2027-01-15T00:00:00Z"
 reset: true
+dataset:
+  min_wells: 500
 turns:
   - user_id: U-601
     session: new
@@ -9,6 +11,9 @@ turns:
       its real status right now, and why?
     expect:
       kind: table
+      rows_min: 1
       row_fields: [asset_id, area_name, latest_inspection, latest_operator_note, status_now]
+      evidence_min: 1
+      citations_min: 1
       summary_contains:
         - "OPS-3"

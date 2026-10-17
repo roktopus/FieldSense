@@ -87,7 +87,7 @@ Private preferences (`UserPreference`) are the opposite: Nathan’s “sort by a
 
 ## 7. Harness-oriented development
 
-Final questions live as YAML under `tests/harness/scenarios/final/`. Each turn states **invariants** (visual kind, required columns, substrings, coverage status) — not golden barrel totals. The runner resets mutable tables, plays turns with the named `user_id`, and fails loud when a capability regresses.
+Final questions live as YAML under `tests/harness/scenarios/final/`. Each turn states **invariants** — visual kind, required columns, allowed cell values, evidence and citation counts, and (for a later turn) that the answer still names a well from earlier in that chat. The file is schema-checked before it runs, and it refuses a database with fewer than 500 wells so the sample import cannot pass the final suite. Failures quote the actual summary and write the answer JSON under `tests/harness/_failures/`. They do not memorize barrel totals.
 
 ```bash
 make DATASET_PROFILE=test up

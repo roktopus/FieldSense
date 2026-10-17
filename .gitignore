@@ -91,6 +91,9 @@ submission/private/
 .vector_cache/
 .venv-docs/
 
+# Harness dumps the failing answer here for debugging
+backend/tests/harness/_failures/
+
 # Local capture / report scripts and generated outputs (not part of the app)
 scripts/
 docs/scenario-capture/

@@ -1,5 +1,7 @@
 as_of: "2027-01-15T00:00:00Z"
 reset: true
+dataset:
+  min_wells: 500
 turns:
   - user_id: U-201
     session: new
@@ -10,4 +12,9 @@ turns:
     expect:
       kind: stacked_bar
       visual_kinds: [table, stacked_bar]
+      rows_min: 1
       row_fields: [area_name, reason, share_pct, typical_extra_days]
+      row_values:
+        reason: ["parts", "crews", "contractors", "weather"]
+      evidence_min: 1
+      citations_min: 1
