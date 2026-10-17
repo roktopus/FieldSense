@@ -1,0 +1,99 @@
+# ---------------------------------------------------------------------------
+# FieldSense — git ignore
+# Plans are local agent working docs; do not commit challenge evaluation
+# expected answers into runtime paths (see .plans/ for offline planning only).
+# ---------------------------------------------------------------------------
+
+# Local planning / agent progress (gitignored by design)
+.plans/
+.plan/
+plans/
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+secrets/
+
+# Dataset (do not redistribute until license/terms checked)
+# Symlink or mount sample-data locally; keep out of public remotes if required
+data/sample-data/
+data/test-data/
+sample-data/
+test-data/
+*.zip
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+backend/.venv/
+venv/
+ENV/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# Node / frontend
+node_modules/
+frontend/dist/
+frontend/build/
+*.tsbuildinfo
+.vite/
+coverage/
+playwright-report/
+test-results/
+.turbo/
+
+# Docker / local volumes
+.docker-data/
+postgres-data/
+pgdata/
+
+# IDE / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example
+*.swp
+*.swo
+
+# Logs & temp
+*.log
+logs/
+tmp/
+.tmp/
+.cache/
+
+# Evaluation artefacts (may contain expected answers / run outputs)
+eval/results/
+eval/artifacts/
+submission/private/
+
+# Model / embedding caches
+.embeddings/
+.chroma/
+.vector_cache/
+.venv-docs/
+docs/scenario-capture/
+
+# Local scratch / OS
+*.orig
+*.bak
+.AppleDouble
+.LSOverride
