@@ -24,7 +24,7 @@ def db():
 
 
 def test_q2_query_non_producing_northeast_block_8(db):
-    as_of = datetime(2026, 10, 17, tzinfo=timezone.utc)
+    as_of = datetime(2026, 10, 16, tzinfo=timezone.utc)
     data = non_producing_in_area(db, "Northeast Block 8", as_of)
     assert data.get("error") is None
     assert data["count"] >= 1
@@ -33,7 +33,7 @@ def test_q2_query_non_producing_northeast_block_8(db):
 
 def test_q2_route_table_not_status_crash(db):
     """Regression: 'not producing oil right now' must not hit single-well status."""
-    as_of = datetime(2026, 10, 17, tzinfo=timezone.utc)
+    as_of = datetime(2026, 10, 16, tzinfo=timezone.utc)
     q = (
         "Which wells in Northeast Block 8 are not producing oil right now, "
         "and why? Show them in a table."

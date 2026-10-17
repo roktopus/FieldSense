@@ -9,9 +9,11 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     app_env: Literal["development", "staging", "production"] = "development"
+    dataset_profile: Literal["sample", "test"] = "sample"
     database_url: str = "postgresql+psycopg://fieldsense:fieldsense@localhost:5432/fieldsense"
     source_root: str = "/data/sample-data"
-    evaluation_as_of: str = "2026-10-17T00:00:00Z"
+    # sample profile default; test profile uses 2027-01-15 via env
+    evaluation_as_of: str = "2026-10-16T00:00:00Z"
     app_timezone: str = "UTC"
     model_provider: str = "openai_compatible"
     model_base_url: str = ""

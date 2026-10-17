@@ -11,10 +11,11 @@ class ProductionStatus(str, Enum):
     UNKNOWN = "unknown"
 
 
-# Extracted from fleet/well-types manuals (T200 §9.3, T350 producing rule).
+# Extracted from fleet/well-types manuals (T200 §9.3, T350, T500 §3).
 THRESHOLDS_C: dict[str, Decimal] = {
     "T200": Decimal("15"),
     "T350": Decimal("20"),
+    "T500": Decimal("25"),
 }
 
 

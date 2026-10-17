@@ -1,0 +1,16 @@
+as_of: "2027-01-15T00:00:00Z"
+reset: true
+turns:
+  - user_id: U-201
+    session: new
+    text: >
+      All our wells feed one reservoir. Map the reservoir pressure across the field
+      from the pressure data.
+    expect:
+      kind: short_answer
+      coverage_status: unsupported
+      summary_contains:
+        - "cannot"
+        - "pressure"
+      summary_excludes:
+        - "WELL-0001 is"

@@ -1,0 +1,22 @@
+as_of: "2027-01-15T00:00:00Z"
+reset: true
+turns:
+  - user_id: U-301
+    session: new
+    session_key: robert_q7
+    text: >
+      Over the last month the operators have written notes about wells that sound or
+      behave wrong. Which of those wells haven't had a repair since? Rank the 10 most likely
+      to need a repair in the next 90 days, other than a spill clean-up, and quote the notes
+      as evidence.
+    expect:
+      kind: table
+      row_fields: [rank, asset_id, area_name, operator_note_evidence, last_repair]
+  - user_id: U-301
+    session: same
+    session_key: robert_q7
+    text: Which three would you send a crew to first this week, and why?
+    expect:
+      kind: short_answer
+      summary_contains:
+        - "crew"

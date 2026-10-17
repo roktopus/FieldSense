@@ -96,6 +96,8 @@ def import_dataset(db: Session, source_root: Path, dataset_version: str = "sampl
         "updated": 0,
         "quarantine": 0,
         "unknown_refs": 0,
+        "corrections_from_notes": 0,
+        "parts_installed": 0,
     }
     unknown_refs: list[str] = []
 
@@ -177,19 +179,18 @@ def import_dataset(db: Session, source_root: Path, dataset_version: str = "sampl
             for k, v in rule.items():
                 setattr(existing, k, v)
 
-    # Documents: manuals + SOPs
-    for rel in [
-        "well-types/T200.md",
-        "well-types/T350.md",
-        "sops/spill-response-sop.md",
-        "sops/regulatory-compliance-sop.md",
-        "sops/field-work-sop.md",
-    ]:
-        path = fleet / rel
-        if not path.exists():
-            continue
+    # Documents: all well-type manuals + all SOPs under fleet/ (profile-agnostic)
+    doc_paths: list[Path] = []
+    wt_dir = fleet / "well-types"
+    sop_dir = fleet / "sops"
+    if wt_dir.is_dir():
+        doc_paths.extend(sorted(wt_dir.glob("*.md")))
+    if sop_dir.is_dir():
+        doc_paths.extend(sorted(sop_dir.glob("*.md")))
+    for path in doc_paths:
         body = path.read_text(encoding="utf-8")
         h = file_hash(str(path))
+        rel = str(path.relative_to(fleet))
         key = f"fleet/{rel}"
         existing = db.execute(select(models.Document).where(models.Document.doc_key == key)).scalar_one_or_none()
         if existing and existing.content_hash == h:
@@ -209,7 +210,6 @@ def import_dataset(db: Session, source_root: Path, dataset_version: str = "sampl
             )
             db.add(doc)
             db.flush()
-            # simple chunk by heading
             parts = re.split(r"(?m)^## ", body)
             for i, part in enumerate(parts):
                 text = part if i == 0 else "## " + part
@@ -441,6 +441,8 @@ def import_dataset(db: Session, source_root: Path, dataset_version: str = "sampl
                         for fact in facts:
                             db.add(models.ExtractedFact(**fact))
                             counts["extracted_facts"] += 1
+                            if fact.get("fact_type") in {"parts_installed", "pump_lot"}:
+                                counts["parts_installed"] += 1
 
         # regulatory
         reg_path = well_dir / "regulatory-events.jsonl"
@@ -521,6 +523,49 @@ def import_dataset(db: Session, source_root: Path, dataset_version: str = "sampl
                     counts["noop"] += 1
                 else:
                     counts["updated"] += 1
+
+                # Promote formal data_correction notes into the Correction table
+                if row.get("note_type") == "data_correction" and row.get("inspection_id") and row.get("field"):
+                    field = str(row["field"])
+                    new_val = row.get("corrected_value")
+                    if new_val is not None:
+                        key = f"import:{nid}:{field}:{new_val}"
+                        existing_c = (
+                            db.query(models.Correction)
+                            .filter(models.Correction.idempotency_key == key)
+                            .first()
+                        )
+                        if existing_c is None:
+                            for prior in (
+                                db.query(models.Correction)
+                                .filter(
+                                    models.Correction.target_id == row["inspection_id"],
+                                    models.Correction.field == field,
+                                    models.Correction.status == "active",
+                                )
+                                .all()
+                            ):
+                                prior.status = "superseded"
+                            db.add(
+                                models.Correction(
+                                    target_type="inspection",
+                                    target_id=row["inspection_id"],
+                                    field=field,
+                                    original_value=(
+                                        str(row["original_value"])
+                                        if row.get("original_value") is not None
+                                        else None
+                                    ),
+                                    new_value=str(new_val),
+                                    unit=None,
+                                    author_user_id=row.get("author_user_id") or "import",
+                                    reason=row.get("text") or f"Source note {nid}",
+                                    scope="inspection",
+                                    status="active",
+                                    idempotency_key=key,
+                                )
+                            )
+                            counts["corrections_from_notes"] += 1
 
         db.commit()  # per-well checkpoint
 

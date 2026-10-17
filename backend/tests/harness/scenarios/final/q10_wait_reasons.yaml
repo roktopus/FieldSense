@@ -1,0 +1,13 @@
+as_of: "2027-01-15T00:00:00Z"
+reset: true
+turns:
+  - user_id: U-201
+    session: new
+    text: >
+      When a well stays shut in longer than the repair itself, what are we usually waiting on:
+      parts, crews, contractors or weather? Break it down by area for jobs started in 2026, with
+      the typical number of extra days, and tell me if any area stands out.
+    expect:
+      kind: stacked_bar
+      visual_kinds: [table, stacked_bar]
+      row_fields: [area_name, reason, share_pct, typical_extra_days]

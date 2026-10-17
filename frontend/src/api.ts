@@ -12,9 +12,10 @@ export type Answer = {
   run_id?: string;
   result_set_id?: string;
   status?: string;
+  kind?: string;
   summary?: string;
   visuals?: Array<Record<string, unknown>>;
-  rows?: unknown[];
+  rows?: unknown[] | null;
   data?: Record<string, unknown>;
   conflicts?: unknown[];
   coverage?: Record<string, unknown>;

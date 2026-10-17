@@ -1,0 +1,16 @@
+as_of: "2027-01-15T00:00:00Z"
+reset: true
+turns:
+  - user_id: U-401
+    session: new
+    text: >
+      Since 1 Nov 2026, every time an operator note reports gas at a well, did we get
+      someone out to that well in time under our operating procedures? List every report and
+      whether the response met the deadline.
+    expect:
+      kind: table
+      visual_kinds: [table]
+      rows_min: 1
+      row_fields: [asset_id, area_name, reported_at, response, hours_to_response, deadline_hours, met]
+      summary_contains:
+        - "OPS-1"

@@ -80,7 +80,7 @@ Stop with `make down`. Logs: `make logs`.
 
 ### Demo walkthrough
 
-1. Select a demo user (e.g. **Michael Turner**) — this is identity selection, not production auth.
+1. Choose **Who’s asking** (e.g. a field inspector) — demo identity only, not production sign-in.
 2. Ask: *Which wells in Northeast Block 7 had the most downtime between 16 June and 16 October 2026, and why? Show a bar chart.*
 3. Open **View evidence** on the answer.
 4. Ask: *Is WELL-0001 producing oil right now? Show me its status card.*
@@ -109,9 +109,10 @@ Copy [`.env.example`](./.env.example) → `.env`. Important variables:
 
 | Variable | Purpose |
 |---|---|
-| `DATASET_HOST_PATH` | Host path to `sample-data` (Compose bind mount) |
+| `DATASET_HOST_PATH` | Host path to `sample-data` or `test-data/dataset` (Compose bind mount) |
+| `DATASET_PROFILE` | `sample` \| `test` (Makefile + harness gating) |
 | `APP_ENV` | `development` \| `staging` \| `production` |
-| `EVALUATION_AS_OF` | Analysis clock (default `2026-10-17T00:00:00Z`) |
+| `EVALUATION_AS_OF` | Analysis clock (`2026-10-16` sample / `2027-01-15` test) |
 | `MODEL_PROVIDER` / `MODEL_BASE_URL` / `MODEL_API_KEY` / `MODEL_NAME` | Optional OpenAI-compatible LLM |
 | `CORS_ORIGINS` | Allowed browser origins (never `*` in production) |
 | `SESSION_SECRET` | Session cookie signing (≥ 24 random chars in production) |
@@ -141,18 +142,20 @@ Never commit `.env` or API keys.
 cd backend && python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
 .venv/bin/pytest tests/domain -q
 
-# Domain + evaluation against imported DB (container)
-make evaluate
-# or: docker compose exec api pytest tests/domain tests/evaluation -q
+# Sample Q1–Q18 (requires sample-data import)
+make DATASET_PROFILE=sample evaluate
+
+# Final-question YAML harness (requires test-data import)
+make DATASET_PROFILE=test up
+make DATASET_PROFILE=test import-data
+make harness-final
 ```
 
 ### Re-import
 
 ```bash
-make import-data
-# or explicitly:
-docker compose exec api python -m app.ingestion.cli run \
-  --path /data/sample-data --dataset-version sample-v1
+make DATASET_PROFILE=sample import-data   # or DATASET_PROFILE=test
+# Container path is always /data/sample-data (bind mount from DATASET_HOST_PATH)
 ```
 
 ### Demo identity
@@ -171,7 +174,7 @@ The UI user picker sets a demo identity. The API trusts `X-User-Id` for the chal
 6. **Honest conflicts** — Informal notes never silently override measurements.
 7. **Eval hygiene** — Official Q&A fixtures stay in the test harness, not the knowledge base.
 
-See also [`docs/KNOWN_LIMITATIONS.md`](./docs/KNOWN_LIMITATIONS.md).
+See also [`docs/KNOWN_LIMITATIONS.md`](./docs/KNOWN_LIMITATIONS.md) and [`docs/QA_REPORT.md`](./docs/QA_REPORT.md) (what we QAed, what broke, how we fixed it).
 
 ---
 
@@ -191,6 +194,11 @@ Read in order: `01-problem-statement.md` → `02-dataset-guide.md` → `03-evalu
 |---|---|
 | [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) | System design |
 | [`docs/KNOWN_LIMITATIONS.md`](./docs/KNOWN_LIMITATIONS.md) | Honest gaps |
+| [`docs/QA_REPORT.md`](./docs/QA_REPORT.md) | Q1–Q18 QA method, failures, fixes |
+| [`docs/algorithms/backend-algorithms.md`](./docs/algorithms/backend-algorithms.md) | How answers are computed |
+| [`docs/algorithms/frontend-algorithms.md`](./docs/algorithms/frontend-algorithms.md) | How the UI turns envelopes into trust |
+| [`docs/UI_GUIDELINES.md`](./docs/UI_GUIDELINES.md) | Theme, UX checklist, and friendly-copy rulebook |
+| [`docs/HOST_FINAL_QUESTIONS.md`](./docs/HOST_FINAL_QUESTIONS.md) | Official test-data Q1–Q11 for host submission |
 | [`docs/decisions/`](./docs/decisions/) | ADRs |
 
 ---

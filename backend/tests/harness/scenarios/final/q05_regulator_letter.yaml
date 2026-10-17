@@ -1,0 +1,13 @@
+as_of: "2027-01-15T00:00:00Z"
+reset: true
+turns:
+  - user_id: U-201
+    session: new
+    text: >
+      The State Oil & Gas Commission wrote to us in November 2026 about spills. Which of our
+      spills does the letter cover, and on which ones are we not compliant? Show me a table.
+    expect:
+      kind: table
+      row_fields: [asset_id, area_name, inspection, volume_bbl, cleanup_job, compliant]
+      summary_contains:
+        - "Soil samples"

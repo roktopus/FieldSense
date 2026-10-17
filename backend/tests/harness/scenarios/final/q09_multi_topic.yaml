@@ -1,0 +1,36 @@
+as_of: "2027-01-15T00:00:00Z"
+reset: true
+turns:
+  - user_id: U-301
+    session: new
+    session_key: robert_q9
+    text: How many recalled pumps are still in the ground, and in which areas?
+    expect:
+      kind: short_answer
+      summary_contains:
+        - "recalled"
+  - user_id: U-301
+    session: same
+    session_key: robert_q9
+    text: Different topic. Who leads Northwest Production, and how many wells does that team run?
+    expect:
+      kind: short_answer
+      summary_contains:
+        - "Northwest"
+  - user_id: U-301
+    session: same
+    session_key: robert_q9
+    text: What does our operations SOP say about cold weather? Name one well that missed the check in December.
+    expect:
+      kind: short_answer
+      summary_contains:
+        - "OPS-5"
+  - user_id: U-301
+    session: same
+    session_key: robert_q9
+    text: An operator reported a gas smell at WELL-0332 on 3 Dec. What was the H2S reading?
+    expect:
+      kind: short_answer
+      summary_contains:
+        - "H2S"
+        - "WELL-0332"

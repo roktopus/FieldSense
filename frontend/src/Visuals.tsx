@@ -40,19 +40,42 @@ const COL_LABELS: Record<string, string> = {
   asset_id: "Well",
   well_type: "Type",
   delta_c: "ΔT (°C)",
-  recorded_status: "Recorded",
-  recorded_status_stale: "Stale?",
+  mean_delta_c: "Avg ΔT (°C)",
+  recorded_status: "Recorded status",
+  recorded_status_stale: "Out of date?",
   reason: "Why",
   inspector_observation: "Inspector notes",
   downtime_days: "Downtime (days)",
   status: "Status",
-  lat: "Lat",
-  lon: "Lon",
+  status_now: "Status now",
+  lat: "Latitude",
+  lon: "Longitude",
   events: "Events",
   area_name: "Area",
   total: "Total",
   inspection_id: "Inspection",
   inspector_name: "Inspector",
+  reported_at: "Reported",
+  response: "Response",
+  hours_to_response: "Hours to respond",
+  deadline_hours: "Deadline (hours)",
+  met: "Met deadline?",
+  bypass_in: "Bypass in",
+  bypass_out: "Bypass out",
+  approval: "Approval",
+  volume_bbl: "Volume (bbl)",
+  cleanup_job: "Cleanup job",
+  compliant: "Compliant?",
+  latest_inspection: "Latest inspection",
+  latest_operator_note: "Latest operator note",
+  rank: "Rank",
+  operator_note_evidence: "Operator note",
+  last_repair: "Last repair",
+  lot: "Lot",
+  provenance: "How we know",
+  share_pct: "Share (%)",
+  typical_extra_days: "Typical extra days",
+  inspection: "Inspection",
 };
 
 function labelCol(key: string): string {
@@ -62,26 +85,38 @@ function labelCol(key: string): string {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+function friendlyMissing(fields: string[]): string {
+  const map: Record<string, string> = {
+    reservoir_pressure: "reservoir pressure",
+    tubing_pressure: "tubing pressure",
+    casing_pressure: "casing pressure",
+    oil_volume_bbl: "oil volume (barrels)",
+    bopd: "barrels per day",
+    cumulative_production: "cumulative production",
+  };
+  return fields.map((f) => map[f] || f.replace(/_/g, " ")).join(", ");
+}
+
 function StatusBadge({ status }: { status?: string }) {
   const s = (status || "").toLowerCase().replace(/\s+/g, "_");
   if (s === "producing") {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-800 ring-1 ring-emerald-200/80">
-        <IconCheck size={14} className="text-emerald-600" />
+      <span className="inline-flex items-center gap-1.5 rounded-md bg-moss-soft px-2 py-1 text-xs font-semibold text-[var(--fs-ok)] ring-1 ring-moss/20">
+        <IconCheck size={14} className="text-moss" />
         Producing
       </span>
     );
   }
   if (s === "not_producing") {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-md bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-800 ring-1 ring-rose-200/80">
-        <IconX size={14} className="text-rose-600" />
+      <span className="inline-flex items-center gap-1.5 rounded-md bg-rose-50 px-2 py-1 text-xs font-semibold text-[var(--fs-danger)] ring-1 ring-rose-200/80">
+        <IconX size={14} className="text-[var(--fs-danger)]" />
         Not producing
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
+    <span className="inline-flex items-center gap-1.5 rounded-md bg-stone px-2 py-1 text-xs font-semibold text-mute ring-1 ring-[var(--fs-border)]">
       <IconInfo size={14} />
       {status || "Unknown"}
     </span>
@@ -100,15 +135,17 @@ function Panel({
   children: ReactNode;
 }) {
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-200/90 bg-gradient-to-b from-white to-slate-50/80 shadow-[0_1px_0_rgba(15,23,42,0.04)]">
-      <div className="flex items-center gap-2.5 border-b border-slate-100 bg-white/90 px-4 py-2.5">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-50 text-accent">
+    <div className="overflow-hidden rounded-[14px] border border-[var(--fs-border)] bg-white shadow-soft">
+      <div className="flex items-center gap-2.5 border-b border-[var(--fs-border)] bg-paper/90 px-4 py-2.5">
+        <span className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-moss-soft text-moss">
           {icon}
         </span>
         <div className="min-w-0 flex-1">
-          <h3 className="truncate font-display text-[15px] font-semibold tracking-tight text-ink">{title}</h3>
+          <h3 className="truncate font-display text-[15px] font-semibold tracking-tight text-ink">
+            {title}
+          </h3>
         </div>
-        {meta ? <div className="shrink-0 text-xs text-slate-500">{meta}</div> : null}
+        {meta ? <div className="shrink-0 text-xs text-mute">{meta}</div> : null}
       </div>
       <div className="p-3 sm:p-4">{children}</div>
     </div>
@@ -117,28 +154,39 @@ function Panel({
 
 export function VisualRenderer({ answer, onOpenEvidence }: Props) {
   const visuals = answer.visuals || [];
-  if (!visuals.length && answer.rows) {
+  const rows = (answer.rows as Record<string, unknown>[] | undefined) || [];
+  const unsupported = answer.coverage?.status === "unsupported";
+  const shortOnly =
+    unsupported ||
+    answer.kind === "short_answer" ||
+    (String(answer.kind || "") === "" && !visuals.length && rows.length === 0);
+
+  // Empty [] is truthy in JS — only fall back to a table when there are real rows.
+  if (!visuals.length && rows.length > 0 && !shortOnly) {
     return (
       <div className="mt-3 space-y-3">
-        <DataTable rows={answer.rows as Record<string, unknown>[]} />
+        <DataTable rows={rows} />
         <AnswerFooter answer={answer} onOpenEvidence={onOpenEvidence} />
       </div>
     );
   }
   return (
     <div className="mt-3 space-y-3">
-      {visuals.map((v, idx) => {
+      {!shortOnly
+        ? visuals.map((v, idx) => {
         const kind = String(v.kind || "");
         if (kind === "status_card") return <StatusCard key={idx} answer={answer} />;
-        if (kind === "table")
+        if (kind === "table") {
+          if (!rows.length) return null;
           return (
             <DataTable
               key={idx}
-              title={String(v.title || "Results")}
-              rows={(answer.rows as Record<string, unknown>[]) || []}
+              title={String(v.title || "Matching wells")}
+              rows={rows}
               fields={(v.fields as string[] | undefined) || undefined}
             />
           );
+        }
         if (kind === "bar_chart")
           return (
             <BarBlock
@@ -159,16 +207,54 @@ export function VisualRenderer({ answer, onOpenEvidence }: Props) {
           return <MapBlock key={idx} pins={(answer.rows as Record<string, unknown>[]) || []} />;
         if (kind === "heatmap")
           return <HeatmapBlock key={idx} rows={(answer.rows as Record<string, unknown>[]) || []} />;
+        if (kind === "stacked_bar")
+          return (
+            <StackedBarBlock
+              key={idx}
+              title={String(v.title || "Stacked comparison")}
+              rows={
+                ((answer.data?.stacked as Record<string, unknown>[]) ||
+                  (answer.rows as Record<string, unknown>[]) ||
+                  []) as Record<string, unknown>[]
+              }
+              fields={(v.fields as string[] | undefined) || undefined}
+            />
+          );
         if (kind === "well_picker")
           return null; // summary already explains private-memory miss — no duplicate coaching panel
         return null;
-      })}
-      {(answer.conflicts as unknown[] | undefined)?.length ? (
-        <div className="flex gap-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm">
-          <IconAlert className="mt-0.5 shrink-0 text-amber-700" />
+      })
+        : null}
+      {unsupported ? (
+        <div className="flex gap-3 rounded-[14px] border border-[var(--fs-border)] bg-stone/70 p-3.5 text-sm">
+          <IconInfo className="mt-0.5 shrink-0 text-mute" />
           <div>
-            <div className="font-semibold text-amber-900">Conflicts disclosed</div>
-            <ul className="mt-1 list-inside list-disc text-xs text-amber-950">
+            <div className="font-semibold text-ink">We don&apos;t have this data</div>
+            <p className="mt-1 text-xs leading-relaxed text-mute">
+              Missing:{" "}
+              {Array.isArray(answer.coverage?.missing)
+                ? friendlyMissing(answer.coverage!.missing as string[])
+                : "see the summary above"}
+              . No map or table is shown — inventing values would be dishonest.
+            </p>
+            {Array.isArray(answer.coverage?.searched) ? (
+              <p className="mt-1 text-xs text-mute/80">
+                Looked in:{" "}
+                {(answer.coverage!.searched as string[])
+                  .map((s) => s.replace(/_/g, " "))
+                  .join(", ")}
+                .
+              </p>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+      {(answer.conflicts as unknown[] | undefined)?.length ? (
+        <div className="flex gap-3 rounded-[14px] border border-amber-200 bg-amber-50/90 p-3.5 text-sm">
+          <IconAlert className="mt-0.5 shrink-0 text-[var(--fs-warn)]" />
+          <div>
+            <div className="font-semibold text-amber-950">Sources disagree</div>
+            <ul className="mt-1 list-inside list-disc text-xs text-amber-950/90">
               {(answer.conflicts as Array<Record<string, unknown>>).map((c, i) => (
                 <li key={i}>{String(c.message || c.type || JSON.stringify(c))}</li>
               ))}
@@ -183,9 +269,13 @@ export function VisualRenderer({ answer, onOpenEvidence }: Props) {
 
 function AnswerFooter({ answer, onOpenEvidence }: Props) {
   const scope = answer.scope || {};
+  const unsupported = answer.coverage?.status === "unsupported";
   const scopeBits = Object.entries(scope)
     .filter(([, v]) => v != null && v !== "")
     .map(([k, v]) => ({ k: labelCol(k), v: String(v) }));
+  // Coverage refusals store no linked evidence — don't tease an empty Sources drawer.
+  // (Other answers may still open Sources; the API synthesizes from rows when needed.)
+  const showSources = Boolean(answer.result_set_id) && !unsupported;
 
   return (
     <div className="space-y-2">
@@ -193,29 +283,31 @@ function AnswerFooter({ answer, onOpenEvidence }: Props) {
         {(answer.citations || []).slice(0, 6).map((c, i) => (
           <span
             key={i}
-            className="inline-flex items-center gap-1 rounded-md bg-sky-50 px-2 py-1 text-xs font-medium text-sky-900 ring-1 ring-sky-100"
+            className="inline-flex items-center gap-1 rounded-md bg-moss-soft px-2 py-1 text-xs font-medium text-moss ring-1 ring-moss/15"
           >
-            <IconEvidence size={12} className="text-sky-600" />
+            <IconEvidence size={12} className="text-moss" />
             {c.label || c.id}
           </span>
         ))}
-        {answer.result_set_id ? (
+        {showSources ? (
           <button
             type="button"
             onClick={onOpenEvidence}
-            className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-accent/10 px-3 py-1.5 text-sm font-semibold text-accent transition hover:bg-accent/15"
+            className="ml-auto inline-flex items-center gap-1.5 rounded-[10px] bg-copper/10 px-3 py-1.5 text-sm font-semibold text-copper-deep transition hover:bg-copper/15"
           >
             <IconEvidence size={16} />
-            View evidence
+            See sources
           </button>
         ) : null}
       </div>
       {scopeBits.length ? (
-        <div className="flex flex-wrap gap-1.5 text-xs text-slate-500">
+        <div className="flex flex-wrap gap-1.5 text-xs text-mute">
           {scopeBits.map(({ k, v }) => (
-            <span key={k} className="rounded-md bg-slate-100/80 px-2 py-1">
-              <span className="text-slate-400">{k}</span>{" "}
-              <span className="font-medium text-slate-600">{v.length > 40 ? `${v.slice(0, 40)}…` : v}</span>
+            <span key={k} className="rounded-md bg-stone px-2 py-1">
+              <span className="text-mute/70">{k}</span>{" "}
+              <span className="font-medium text-ink/80">
+                {v.length > 40 ? `${v.slice(0, 40)}…` : v}
+              </span>
             </span>
           ))}
         </div>
@@ -235,8 +327,8 @@ function StatusCard({ answer }: { answer: Answer }) {
       title={String(data.asset_id || "Well")}
       meta={<StatusBadge status={data.status} />}
     >
-      <p className="mb-4 flex items-start gap-2 text-sm text-slate-600">
-        <IconInfo size={16} className="mt-0.5 shrink-0 text-slate-400" />
+      <p className="mb-4 flex items-start gap-2 text-sm text-mute">
+        <IconInfo size={16} className="mt-0.5 shrink-0 text-mute/70" />
         Based on the latest inspection — not live telemetry.
       </p>
       <div className="grid gap-3 sm:grid-cols-3">
@@ -245,30 +337,30 @@ function StatusCard({ answer }: { answer: Answer }) {
             notProd ? "bg-rose-50/80 ring-rose-100" : "bg-emerald-50/80 ring-emerald-100"
           }`}
         >
-          <div className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-slate-500">
+          <div className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-mute">
             <IconThermometer size={14} />
             ΔT (wellhead vs air)
           </div>
           <div className="mt-1 font-display text-3xl font-semibold tracking-tight text-ink">
             {data.delta_c ?? "—"}
-            <span className="ml-1 text-base font-normal text-slate-500">°C</span>
+            <span className="ml-1 text-base font-normal text-mute">°C</span>
           </div>
-          <div className="mt-1 text-xs text-slate-500">Threshold {data.threshold_c ?? "—"} °C</div>
+          <div className="mt-1 text-xs text-mute">Threshold {data.threshold_c ?? "—"} °C</div>
         </div>
 
-        <div className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
-          <div className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-slate-500">
+        <div className="rounded-xl bg-white p-3 ring-1 ring-[var(--fs-border)]">
+          <div className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-mute">
             <IconCalendar size={14} />
             Last inspection
           </div>
           <div className="mt-2 space-y-1.5 text-sm">
             <div className="font-medium text-ink">{String(li.inspected_at || "").slice(0, 10) || "—"}</div>
-            <div className="flex items-center gap-1.5 text-slate-600">
-              <IconUser size={14} className="text-slate-400" />
+            <div className="flex items-center gap-1.5 text-mute">
+              <IconUser size={14} className="text-mute/70" />
               {li.inspector_name || li.inspector_user_id || "—"}
             </div>
-            <div className="text-slate-500">Method · {li.method || "—"}</div>
-            <div className="font-mono text-xs text-sky-700">{li.inspection_id}</div>
+            <div className="text-mute">Method · {li.method || "—"}</div>
+            <div className="font-mono text-xs text-moss">{li.inspection_id}</div>
           </div>
         </div>
 
@@ -282,15 +374,15 @@ function StatusCard({ answer }: { answer: Answer }) {
               </div>
             </div>
           ) : (
-            <div className="rounded-xl bg-slate-50 p-3 text-sm ring-1 ring-slate-200">
+            <div className="rounded-xl bg-stone/60 p-3 text-sm ring-1 ring-[var(--fs-border)]">
               Recorded · {data.recorded_status || "—"}
             </div>
           )}
           {(data.context_notes || []).slice(0, 1).map((n: any) => (
-            <div key={n.note_id} className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
-              <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Context</div>
-              <p className="mt-1 leading-relaxed text-slate-700">{n.text}</p>
-              <div className="mt-2 font-mono text-[11px] text-sky-700">{n.note_id}</div>
+            <div key={n.note_id} className="rounded-xl border border-[var(--fs-border)] bg-white p-3 text-sm">
+              <div className="text-xs font-semibold uppercase tracking-wide text-mute/70">Context</div>
+              <p className="mt-1 leading-relaxed text-ink/80">{n.text}</p>
+              <div className="mt-2 font-mono text-[11px] text-moss">{n.note_id}</div>
             </div>
           ))}
         </div>
@@ -310,10 +402,10 @@ function DataTable({
 }) {
   if (!rows?.length) {
     return (
-      <Panel icon={<IconTable size={18} />} title={title || "Results"}>
-        <div className="flex items-center gap-2 py-6 text-sm text-slate-500">
+      <Panel icon={<IconTable size={18} />} title={title || "Matching wells"}>
+        <div className="flex items-center gap-2 py-6 text-sm text-mute">
           <IconInfo size={16} />
-          No matching wells for this query.
+          Nothing matched this question.
         </div>
       </Panel>
     );
@@ -328,9 +420,9 @@ function DataTable({
   return (
     <Panel
       icon={<IconTable size={18} />}
-      title={title || "Results"}
+      title={title || "Matching wells"}
       meta={
-        <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 font-medium text-slate-600">
+        <span className="inline-flex items-center gap-1 rounded-md bg-stone px-2 py-1 font-medium text-mute">
           {rows.length} {rows.length === 1 ? "row" : "rows"}
         </span>
       }
@@ -338,7 +430,7 @@ function DataTable({
       <div className="-mx-1 overflow-x-auto">
         <table className="min-w-full text-left text-sm">
           <thead>
-            <tr className="border-b border-slate-200 text-[11px] uppercase tracking-wide text-slate-500">
+            <tr className="border-b border-[var(--fs-border)] text-[11px] uppercase tracking-wide text-mute">
               {cols.map((c) => (
                 <th key={c} className="whitespace-nowrap px-3 py-2 font-semibold" scope="col">
                   {labelCol(c)}
@@ -350,7 +442,7 @@ function DataTable({
             {rows.map((r, i) => (
               <tr
                 key={i}
-                className="border-b border-slate-100/80 transition-colors last:border-0 hover:bg-teal-50/40"
+                className="border-b border-[var(--fs-border)] transition-colors last:border-0 hover:bg-moss-soft/50"
               >
                 {cols.map((c) => (
                   <td key={c} className="px-3 py-2.5 align-top">
@@ -370,7 +462,7 @@ function CellView({ col, value }: { col: string; value: unknown }) {
   if (col === "asset_id") {
     return (
       <span className="inline-flex items-center gap-1.5 font-mono text-[13px] font-semibold text-ink">
-        <IconWell size={14} className="text-accent" />
+        <IconWell size={14} className="text-moss" />
         {String(value)}
       </span>
     );
@@ -384,7 +476,7 @@ function CellView({ col, value }: { col: string; value: unknown }) {
         <IconAlert size={12} /> Yes
       </span>
     ) : (
-      <span className="text-xs text-slate-400">No</span>
+      <span className="text-xs text-mute/70">No</span>
     );
   }
   if (col === "delta_c" && typeof value === "number") {
@@ -401,19 +493,19 @@ function CellView({ col, value }: { col: string; value: unknown }) {
   if (col === "reason" || col === "inspector_observation") {
     const text = value == null || value === "" ? "—" : String(value);
     return (
-      <span className="block max-w-[280px] leading-snug text-slate-700" title={text}>
+      <span className="block max-w-[280px] leading-snug text-ink/80" title={text}>
         {text}
       </span>
     );
   }
   if (col === "well_type") {
     return (
-      <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+      <span className="rounded-md bg-stone px-2 py-0.5 text-xs font-medium text-ink/80">
         {String(value ?? "—")}
       </span>
     );
   }
-  return <span className="text-slate-700">{formatCell(value)}</span>;
+  return <span className="text-ink/80">{formatCell(value)}</span>;
 }
 
 function formatCell(v: unknown): string {
@@ -424,20 +516,23 @@ function formatCell(v: unknown): string {
   return String(v);
 }
 
-const BAR_COLORS = ["#0f766e", "#0e7490", "#0369a1", "#1d4ed8", "#4338ca"];
+const BAR_COLORS = ["#1a7a6d", "#c46b2d", "#0b2420", "#5c6b64", "#9a5222"];
 
 function BarBlock({ title, rows }: { title: string; rows: Record<string, unknown>[] }) {
+  const valueKey = rows[0]?.mean_delta_c != null ? "mean_delta_c" : "downtime_days";
+  const labelKey = rows[0]?.area_name != null && rows[0]?.asset_id == null ? "area_name" : "asset_id";
   const data = rows.map((r) => ({
-    name: String(r.asset_id),
-    days: Number(r.downtime_days || 0),
+    name: String(r[labelKey] ?? r.asset_id ?? r.area_name ?? ""),
+    value: Number(r[valueKey] ?? r.downtime_days ?? r.mean_delta_c ?? 0),
     type: String(r.well_type || ""),
   }));
+  const seriesName = valueKey === "mean_delta_c" ? "Mean ΔT (°C)" : "Downtime (days)";
   return (
     <div className="space-y-3">
       <Panel
         icon={<IconChart size={18} />}
         title={title}
-        meta={<span className="tabular-nums">{data.length} wells</span>}
+        meta={<span className="tabular-nums">{data.length} series</span>}
       >
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
@@ -447,7 +542,7 @@ function BarBlock({ title, rows }: { title: string; rows: Record<string, unknown
               <YAxis
                 type="category"
                 dataKey="name"
-                width={88}
+                width={120}
                 tick={{ fill: "#334155", fontSize: 11, fontFamily: "ui-monospace, monospace" }}
                 axisLine={false}
                 tickLine={false}
@@ -460,7 +555,7 @@ function BarBlock({ title, rows }: { title: string; rows: Record<string, unknown
                   fontSize: 12,
                 }}
               />
-              <Bar dataKey="days" name="Downtime (days)" radius={[0, 6, 6, 0]} barSize={18}>
+              <Bar dataKey="value" name={seriesName} radius={[0, 6, 6, 0]} barSize={18}>
                 {data.map((_, i) => (
                   <Cell key={i} fill={BAR_COLORS[i % BAR_COLORS.length]} />
                 ))}
@@ -471,6 +566,45 @@ function BarBlock({ title, rows }: { title: string; rows: Record<string, unknown
       </Panel>
       <DataTable title="Ranked detail" rows={rows} />
     </div>
+  );
+}
+
+function StackedBarBlock({
+  title,
+  rows,
+  fields,
+}: {
+  title: string;
+  rows: Record<string, unknown>[];
+  fields?: string[];
+}) {
+  const stackKeys =
+    fields?.filter((f) => f !== "area_name") ||
+    ["parts", "crews", "contractors", "weather"].filter((k) =>
+      rows.some((r) => r[k] != null),
+    );
+  const data = rows.map((r) => {
+    const row: Record<string, string | number> = { name: String(r.area_name || r.asset_id || "") };
+    for (const k of stackKeys) row[k] = Number(r[k] || 0);
+    return row;
+  });
+  return (
+    <Panel icon={<IconChart size={18} />} title={title} meta={<span className="tabular-nums">{data.length} areas</span>}>
+      <div className="h-72">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} margin={{ left: 8, right: 16, top: 8, bottom: 4 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+            <XAxis dataKey="name" tick={{ fill: "#64748b", fontSize: 10 }} interval={0} angle={-20} textAnchor="end" height={60} />
+            <YAxis tick={{ fill: "#64748b", fontSize: 11 }} />
+            <Tooltip />
+            <Legend />
+            {stackKeys.map((k, i) => (
+              <Bar key={k} dataKey={k} stackId="a" fill={BAR_COLORS[i % BAR_COLORS.length]} />
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </Panel>
   );
 }
 
@@ -518,8 +652,8 @@ function LineBlock({ title, rows }: { title: string; rows: Record<string, unknow
               }}
             />
             <Legend />
-            <Line type="monotone" dataKey="wellhead" stroke="#0369a1" strokeWidth={2} name="Wellhead" dot={{ r: 3 }} />
-            <Line type="monotone" dataKey="ambient" stroke="#94a3b8" strokeWidth={2} name="Ambient" dot={false} />
+            <Line type="monotone" dataKey="wellhead" stroke="#1a7a6d" strokeWidth={2} name="Wellhead" dot={{ r: 3 }} />
+            <Line type="monotone" dataKey="ambient" stroke="#5c6b64" strokeWidth={2} name="Ambient" dot={false} />
             <Line
               type="monotone"
               dataKey="offlineMark"
@@ -548,7 +682,7 @@ function MapBlock({ pins }: { pins: Record<string, unknown>[] }) {
   if (!pins.length) {
     return (
       <Panel icon={<IconMap size={18} />} title="Map">
-        <p className="text-sm text-slate-500">No map points.</p>
+        <p className="text-sm text-mute">No map points.</p>
       </Panel>
     );
   }
@@ -566,7 +700,7 @@ function MapBlock({ pins }: { pins: Record<string, unknown>[] }) {
             <Marker key={String(p.asset_id)} position={[Number(p.lat), Number(p.lon)]}>
               <Popup>
                 <strong className="font-mono">{String(p.asset_id)}</strong>
-                <div className="mt-1 text-xs text-slate-600">
+                <div className="mt-1 text-xs text-mute">
                   {Array.isArray(p.events) ? `${(p.events as unknown[]).length} event(s)` : ""}
                 </div>
               </Popup>
@@ -596,7 +730,7 @@ function HeatmapBlock({ rows }: { rows: Record<string, unknown>[] }) {
       <div className="overflow-x-auto">
         <table className="min-w-full text-xs">
           <thead>
-            <tr className="text-[11px] uppercase tracking-wide text-slate-500">
+            <tr className="text-[11px] uppercase tracking-wide text-mute">
               <th className="p-2 text-left font-semibold">Area</th>
               {months.map((m) => (
                 <th key={m} className="p-2 font-semibold">
@@ -608,7 +742,7 @@ function HeatmapBlock({ rows }: { rows: Record<string, unknown>[] }) {
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={String(r.area_name)} className="border-t border-slate-100">
+              <tr key={String(r.area_name)} className="border-t border-[var(--fs-border)]">
                 <td className="p-2 font-medium text-ink">{String(r.area_name)}</td>
                 {((r.values as number[]) || []).map((v, i) => {
                   const alpha = v === 0 ? 0.04 : 0.12 + (v / max) * 0.88;

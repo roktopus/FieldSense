@@ -1,0 +1,14 @@
+as_of: "2027-01-15T00:00:00Z"
+reset: true
+turns:
+  - user_id: U-601
+    session: new
+    text: >
+      Across the whole field, not just my area, for which wells do the latest inspection and
+      the operator notes disagree about whether the well is producing oil? For each one, what is
+      its real status right now, and why?
+    expect:
+      kind: table
+      row_fields: [asset_id, area_name, latest_inspection, latest_operator_note, status_now]
+      summary_contains:
+        - "OPS-3"

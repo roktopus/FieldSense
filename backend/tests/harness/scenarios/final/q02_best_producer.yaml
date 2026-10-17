@@ -1,0 +1,12 @@
+as_of: "2027-01-15T00:00:00Z"
+reset: true
+turns:
+  - user_id: U-301
+    session: new
+    text: Which well produced the most oil in 2026?
+    expect:
+      kind: short_answer
+      coverage_status: unsupported
+      summary_contains:
+        - "cannot"
+        - "2026"

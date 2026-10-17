@@ -20,7 +20,7 @@ def db():
 
 
 def test_q1_well_0001_not_producing(db):
-    as_of = datetime(2026, 10, 17, tzinfo=timezone.utc)
+    as_of = datetime(2026, 10, 16, tzinfo=timezone.utc)
     summary = get_well_summary(db, "WELL-0001", as_of)
     assert summary["status"] == "not_producing"
     assert summary["latest_inspection"]["inspection_id"] == "INS-0001-0203"

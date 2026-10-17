@@ -72,7 +72,7 @@ def test_q3_temperature_series_marks_offline(db):
 
 
 def test_q4_spill_history_last_4_years(db):
-    data = spill_history(db, "WELL-0001", start=date(2022, 10, 17), end_inclusive=date(2026, 10, 17))
+    data = spill_history(db, "WELL-0001", start=date(2022, 10, 16), end_inclusive=date(2026, 10, 16))
     assert data["effective_spill_count"] == 6
     assert abs(data["known_volume_total"] - 15.1) < 0.05
     assert any(e["inspection_id"] == "INS-0001-0070" for e in data["excluded"])
@@ -105,7 +105,7 @@ def test_q5_downtime_2025_with_causes(db):
 
 
 def test_q7_spill_map_ne8(db):
-    data = spill_map(db, "Northeast Block 8", date(2026, 7, 19), date(2026, 10, 17))
+    data = spill_map(db, "Northeast Block 8", date(2026, 7, 18), date(2026, 10, 16))
     ids = {p["asset_id"] for p in data["pins"]}
     assert ids == {"WELL-0151", "WELL-0165", "WELL-0175", "WELL-0186"}
     assert data["well_count"] == 4

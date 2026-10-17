@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.agent.evidence_synth import synthesize_evidence
 from app.agent.orchestrator import run_question
 from app.api.deps import get_clock, get_current_user, get_session_id
 from app.db import models
@@ -234,21 +235,52 @@ def list_evidence(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[tuple[str, int, str], Depends(get_current_user)],
     offset: int = 0,
-    limit: int = 20,
+    limit: int = 100,
 ):
     user_id, _, _ = user
     rs = db.get(models.ResultSet, result_set_id)
     if not rs or (rs.owner_user_id and rs.owner_user_id != user_id):
         raise HTTPException(404, "Not found")
+    limit = min(max(limit, 1), 200)
     items = db.execute(
         select(models.EvidenceItem)
         .where(models.EvidenceItem.result_set_id == result_set_id)
         .offset(offset)
         .limit(limit)
     ).scalars().all()
-    total = db.execute(
-        select(models.EvidenceItem).where(models.EvidenceItem.result_set_id == result_set_id)
-    ).scalars().all()
+    total = (
+        db.query(models.EvidenceItem)
+        .filter(models.EvidenceItem.result_set_id == result_set_id)
+        .count()
+    )
+    # Fallback: synthesize from payload for older result sets that stored empty evidence[]
+    if not items and rs.payload:
+        payload = rs.payload or {}
+        # Honest coverage refusals have no source records to show
+        if (payload.get("coverage") or {}).get("status") == "unsupported":
+            return {"items": [], "total": 0}
+        raw = list(payload.get("evidence") or [])
+        if not raw:
+            raw = synthesize_evidence(
+                rows=payload.get("rows") if isinstance(payload.get("rows"), list) else [],
+                citations=payload.get("citations") if isinstance(payload.get("citations"), list) else [],
+                db=db,
+                limit=limit,
+            )
+        synthesized = [
+            {
+                "id": None,
+                "kind": ev.get("kind", "record"),
+                "source_id": ev.get("source_id"),
+                "source_path": ev.get("source_path"),
+                "locator": ev.get("locator"),
+                "title": ev.get("title"),
+                "excerpt": ev.get("excerpt"),
+                "meta": ev.get("meta"),
+            }
+            for ev in raw[:limit]
+        ]
+        return {"items": synthesized, "total": len(synthesized)}
     return {
         "items": [
             {
@@ -263,7 +295,7 @@ def list_evidence(
             }
             for i in items
         ],
-        "total": len(total),
+        "total": total,
     }
 
 
@@ -338,15 +370,25 @@ def feedback_apply(
 
 @router.get("/api/v1/import/latest")
 def latest_import(db: Annotated[Session, Depends(get_db)]):
+    from app.core.config import get_settings
+    from app.domain.clock import parse_as_of
+
+    settings = get_settings()
     batch = db.execute(
         select(models.ImportBatch).order_by(models.ImportBatch.started_at.desc()).limit(1)
     ).scalar_one_or_none()
+    clock = parse_as_of(None)
+    base = {
+        "evaluation_as_of": clock.isoformat().replace("+00:00", "Z"),
+        "dataset_profile": settings.dataset_profile,
+    }
     if not batch:
-        return {"status": "none"}
+        return {"status": "none", **base}
     return {
         "id": str(batch.id),
         "status": batch.status,
         "dataset_version": batch.dataset_version,
         "summary": batch.summary,
         "finished_at": batch.finished_at.isoformat() if batch.finished_at else None,
+        **base,
     }

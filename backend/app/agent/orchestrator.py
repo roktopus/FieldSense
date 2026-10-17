@@ -7,6 +7,9 @@ from typing import Any, Callable
 
 from sqlalchemy.orm import Session
 
+from app.agent.evidence_synth import enrich_answer_evidence
+from app.agent.intents import try_capability_route
+from app.agent.resolve import match_area
 from app.analytics import queries
 from app.analytics.rca import wells_needing_rca
 from app.compliance.assess import assess_containment_breaches, assess_well_compliance
@@ -62,6 +65,9 @@ def run_question(
     try:
         _emit(progress, "run.progress", {"stage": "resolving", "run_id": str(run.id)})
         answer = _route(db, text=text, user_id=user_id, conversation_id=conversation_id, as_of=clock, progress=progress)
+        # Many capability paths return citations + rows but omit evidence[]. Fill before persist
+        # so "See sources" always has linked records for table/chart answers.
+        answer = enrich_answer_evidence(answer, db)
         result = models.ResultSet(
             owner_user_id=user_id,
             kind=answer.get("kind", "answer"),
@@ -103,6 +109,7 @@ def run_question(
             "run_id": str(run.id),
             "result_set_id": str(result.id),
             "status": "complete",
+            "kind": answer.get("kind") or result.kind,
             "scope": answer.get("scope") or {},
             "summary": answer.get("summary", ""),
             "claims": answer.get("claims") or [],
@@ -159,6 +166,17 @@ def _route(
     ql = q.lower()
     _emit(progress, "run.progress", {"stage": "calculating"})
 
+    # General capability tools (final-set + coverage-aware) before sample handlers
+    cap = try_capability_route(
+        db,
+        text=q,
+        user_id=user_id,
+        conversation_id=conversation_id,
+        as_of=as_of,
+    )
+    if cap is not None:
+        return cap
+
     # Feedback / corrections / memory (before analytical intents)
     if _is_thermal_correction(ql):
         return _handle_thermal_correction(db, q, user_id, as_of)
@@ -184,13 +202,9 @@ def _route(
 
     # Area "not producing" must run before single-well status: the phrase
     # "not producing oil right now" contains substring "producing oil right now".
-    area_m = (
-        re.search(r"((?:northeast|southwest)\s+block\s+\d+)", ql)
-        if "not producing" in ql
-        else None
-    )
-    if area_m:
-        area_name = re.sub(r"\s+", " ", area_m.group(1).title())
+    area_obj = match_area(db, q) if "not producing" in ql else None
+    if area_obj:
+        area_name = area_obj.name
         data = queries.non_producing_in_area(db, area_name, as_of)
         unexplained = [
             r["asset_id"]
@@ -250,7 +264,13 @@ def _route(
         return _status_card_answer(data)
 
     if "line chart" in ql or ("wellhead" in ql and "air temperature" in ql) or "last 13 weeks" in ql:
-        asset_id = well_match.group(1).upper() if well_match else "WELL-0001"
+        if not well_match:
+            return {
+                "kind": "short_answer",
+                "summary": "Name the well (WELL-####) for the temperature chart.",
+                "visuals": [],
+            }
+        asset_id = well_match.group(1).upper()
         # Q3: ~13 weekly inspections ending at latest reading on/before as_of
         end_i = as_of.date()
         start = end_i - timedelta(weeks=13)
@@ -368,20 +388,34 @@ def _route(
             ],
         }
 
-    if ("most downtime" in ql or "top" in ql and "downtime" in ql) or (
-        "northeast block 7" in ql and "downtime" in ql
-    ):
-        # Q6 explicit window
+    if "most downtime" in ql or ("downtime" in ql and ("top" in ql or "which" in ql) and "well" in ql):
+        area = match_area(db, q)
+        area_name = area.name if area else None
+        if not area_name:
+            return {
+                "kind": "short_answer",
+                "summary": "Name the geographic area for the downtime ranking (for example an area from the fleet list).",
+                "visuals": [],
+            }
+        end = as_of.date()
+        start = date(end.year, end.month, end.day)
+        # last 4 months relative to as_of
+        month = end.month - 4
+        year = end.year
+        while month <= 0:
+            month += 12
+            year -= 1
+        start = date(year, month, min(end.day, 28))
         data = queries.analyze_downtime_by_area(
             db,
-            area_name="Northeast Block 7",
-            start=date(2026, 6, 16),
-            end_inclusive=date(2026, 10, 16),
+            area_name=area_name,
+            start=start,
+            end_inclusive=end,
             limit=3,
         )
         rows = data.get("rows", [])
         summary = (
-            "Top downtime wells in Northeast Block 7 between 16 Jun and 16 Oct 2026: "
+            f"Top downtime wells in {area_name} between {start.isoformat()} and {end.isoformat()}: "
             + ", ".join(f"{r['asset_id']} ({r['downtime_days']} days)" for r in rows)
             + ". Downtime = 7 days × non-producing weekly inspections (missed inspections add 0)."
         )
@@ -393,7 +427,7 @@ def _route(
             "visuals": [
                 {
                     "kind": "bar_chart",
-                    "title": "Downtime (days) — Northeast Block 7",
+                    "title": f"Downtime (days) — {area_name}",
                     "dataset_ref": "rows",
                     "fields": ["asset_id", "downtime_days", "well_type"],
                 },
@@ -406,7 +440,7 @@ def _route(
             ],
             "scope": data.get("time_bounds"),
             "discussed_asset_ids": [r["asset_id"] for r in rows],
-            "reference_label": "Northeast Block 7 downtime",
+            "reference_label": f"{area_name} downtime",
             "citations": [{"id": "downtime", "label": "Inspection-derived downtime"}],
             "evidence": [
                 {"kind": "inspection", "source_id": iid, "title": iid}
@@ -417,16 +451,20 @@ def _route(
 
     # Heatmap before map: the word "heatmap" contains substring "map".
     if "heatmap" in ql and "spill" in ql:
-        data = queries.spill_heatmap(db, year=2026)
+        year = as_of.year
+        ym = re.search(r"\b(20\d{2})\b", q)
+        if ym:
+            year = int(ym.group(1))
+        data = queries.spill_heatmap(db, year=year)
         return {
             "kind": "heatmap",
-            "summary": "2026 spill counts by area and month (formal corrections excluded).",
+            "summary": f"{year} spill counts by area and month (formal corrections excluded).",
             "data": data,
             "rows": data.get("rows"),
             "visuals": [
                 {
                     "kind": "heatmap",
-                    "title": "Spills by area × month (2026)",
+                    "title": f"Spills by area × month ({year})",
                     "dataset_ref": "rows",
                     "fields": ["area_name", "months", "values", "total"],
                 }
@@ -435,19 +473,26 @@ def _route(
         }
 
     if re.search(r"\bmap\b", ql) and "spill" in ql:
-        # last 90 days from as_of for NE-08
         end = as_of.date()
         start = end - timedelta(days=90)
-        data = queries.spill_map(db, "Northeast Block 8", start, end)
+        area = match_area(db, q)
+        area_name = area.name if area else None
+        if not area_name:
+            return {
+                "kind": "short_answer",
+                "summary": "Name the area for the spill map.",
+                "visuals": [],
+            }
+        data = queries.spill_map(db, area_name, start, end)
         return {
             "kind": "map",
-            "summary": f"{data.get('well_count', 0)} wells with effective spills in Northeast Block 8 over the last 90 days.",
+            "summary": f"{data.get('well_count', 0)} wells with effective spills in {area_name} over the last 90 days.",
             "rows": data.get("pins"),
             "data": data,
             "visuals": [
                 {
                     "kind": "map",
-                    "title": "Spills — Northeast Block 8",
+                    "title": f"Spills — {area_name}",
                     "dataset_ref": "rows",
                     "fields": ["asset_id", "lat", "lon", "events"],
                 }
@@ -500,10 +545,20 @@ def _route(
             ],
         }
 
-    if "not contained" in ql or ("contain" in ql and "southwest block 24" in ql):
+    if "not contained" in ql or ("contain" in ql and "sop" in ql) or (
+        "contain" in ql and match_area(db, q) and "spill" in ql
+    ):
         end = as_of
         start = as_of - timedelta(days=90)
-        data = assess_containment_breaches(db, area_name="Southwest Block 24", start=start, end=end)
+        area = match_area(db, q)
+        area_name = area.name if area else None
+        if not area_name:
+            return {
+                "kind": "short_answer",
+                "summary": "Name the area for containment breach analysis.",
+                "visuals": [],
+            }
+        data = assess_containment_breaches(db, area_name=area_name, start=start, end=end)
         return {
             "kind": "table",
             "summary": f"{len(data.get('breaches', []))} spills exceeded the 4-hour containment limit (SR-02). Coverage: {data.get('coverage')}.",
@@ -512,7 +567,7 @@ def _route(
             "visuals": [
                 {
                     "kind": "table",
-                    "title": "Containment breaches — Southwest Block 24",
+                    "title": f"Containment breaches — {area_name}",
                     "dataset_ref": "rows",
                     "fields": [
                         "asset_id",
@@ -538,20 +593,31 @@ def _route(
         }
 
     if "root-cause analysis" in ql or "root cause analysis" in ql:
+        area = match_area(db, q)
+        area_name = area.name if area else None
+        if not area_name:
+            return {
+                "kind": "short_answer",
+                "summary": "Name the area for RCA candidates.",
+                "visuals": [],
+            }
+        eq = "pump_jack"
+        if "esp" in ql:
+            eq = "esp_pump"
         data = wells_needing_rca(
             db,
-            area_name="Northeast Block 7",
-            equipment_kind="pump_jack",
+            area_name=area_name,
+            equipment_kind=eq,
             as_of=as_of,
         )
         return {
             "kind": "table",
-            "summary": f"{len(data.get('rows', []))} wells need pump-jack RCA under applicable rules. {data.get('note')}",
+            "summary": f"{len(data.get('rows', []))} wells need {eq} RCA under applicable rules. {data.get('note')}",
             "rows": data.get("rows"),
             "visuals": [
                 {
                     "kind": "table",
-                    "title": "Pump-jack RCA candidates — Northeast Block 7",
+                    "title": f"{eq} RCA candidates — {area_name}",
                     "dataset_ref": "rows",
                     "fields": ["asset_id", "well_type", "corrective_count", "threshold", "rule_provenance"],
                 }
@@ -560,10 +626,20 @@ def _route(
             "evidence": [],
         }
 
-    if "needed a report" in ql or ("reportable" in ql and "spill" in ql):
+    if "needed a report" in ql or ("reportable" in ql and "spill" in ql) or (
+        "report to the regulator" in ql
+    ):
         end = as_of.date()
         start = end - timedelta(days=90)
-        data = queries.spill_map(db, "Northeast Block 8", start, end)
+        area = match_area(db, q)
+        area_name = area.name if area else None
+        if not area_name:
+            return {
+                "kind": "short_answer",
+                "summary": "Name the area for reportable spills.",
+                "visuals": [],
+            }
+        data = queries.spill_map(db, area_name, start, end)
         reportable = []
         for pin in data.get("pins", []):
             for ev in pin.get("events", []):
@@ -581,12 +657,12 @@ def _route(
                     )
         return {
             "kind": "table",
-            "summary": f"{len(reportable)} reportable spill(s) in Northeast Block 8 in the last 90 days (threshold ≥ 5 bbl).",
+            "summary": f"{len(reportable)} reportable spill(s) in {area_name} in the last 90 days (threshold ≥ 5 bbl).",
             "rows": reportable,
             "visuals": [
                 {
                     "kind": "table",
-                    "title": "Reportable spills — Northeast Block 8",
+                    "title": f"Reportable spills — {area_name}",
                     "dataset_ref": "rows",
                     "fields": ["asset_id", "date", "volume_bbl", "status"],
                 }
@@ -804,14 +880,15 @@ def _status_card_answer(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def _is_thermal_correction(ql: str) -> bool:
-    return "reading" in ql and (
-        "wrong" in ql or "faulty" in ql or "re-measured" in ql or "remeasured" in ql or "41.0" in ql
+    has_temp = "°" in ql or "wellhead" in ql or re.search(r"\d+(?:\.\d+)?\s*°?\s*c\b", ql)
+    return bool(has_temp) and (
+        "wrong" in ql or "faulty" in ql or "re-measured" in ql or "remeasured" in ql
     )
 
 
 def _is_spill_volume_correction(ql: str) -> bool:
-    return ("spill" in ql or "bbl" in ql) and ("measured" in ql or "5.4" in ql) and (
-        "4.5" in ql or "estimated" in ql or "ai" in ql
+    return ("spill" in ql or "bbl" in ql) and ("measured" in ql or "correct" in ql) and (
+        "estimated" in ql or "ai" in ql or "bbl" in ql
     )
 
 
@@ -833,9 +910,21 @@ def _handle_thermal_correction(db: Session, text: str, user_id: str, as_of: date
     from sqlalchemy import select
 
     m = re.search(r"(WELL-\d{4})", text, re.I)
-    asset_id = m.group(1).upper() if m else "WELL-0164"
+    if not m:
+        return {
+            "kind": "short_answer",
+            "summary": "Name the well (WELL-####) and the corrected wellhead temperature in °C.",
+            "visuals": [],
+        }
+    asset_id = m.group(1).upper()
     temp_m = re.search(r"(\d+(?:\.\d+)?)\s*°?\s*c", text, re.I)
-    new_temp = temp_m.group(1) if temp_m else "41.0"
+    if not temp_m:
+        return {
+            "kind": "short_answer",
+            "summary": "Include the corrected wellhead temperature in °C.",
+            "visuals": [],
+        }
+    new_temp = temp_m.group(1)
 
     insp = db.execute(
         select(models.Inspection)
@@ -905,27 +994,71 @@ def _handle_spill_correction(db: Session, text: str, user_id: str, as_of: dateti
     from sqlalchemy import select
 
     m = re.search(r"(WELL-\d{4})", text, re.I)
-    asset_id = m.group(1).upper() if m else "WELL-0151"
+    if not m:
+        return {
+            "kind": "short_answer",
+            "summary": "Name the well (WELL-####) and the measured spill volume in bbl.",
+            "visuals": [],
+        }
+    asset_id = m.group(1).upper()
     # Prefer "measured X bbl" over an earlier AI estimate mentioned in the same sentence
     vol_m = re.search(r"measured\s+(\d+(?:\.\d+)?)\s*bbl", text, re.I) or re.search(
         r"(\d+(?:\.\d+)?)\s*bbl", text, re.I
     )
-    # If multiple bare volumes, take the last (crew measurement usually follows estimate)
     if vol_m and "measured" not in text.lower():
         all_vols = re.findall(r"(\d+(?:\.\d+)?)\s*bbl", text, re.I)
-        new_vol = all_vols[-1] if all_vols else "5.4"
+        new_vol = all_vols[-1] if all_vols else None
     else:
-        new_vol = vol_m.group(1) if vol_m else "5.4"
+        new_vol = vol_m.group(1) if vol_m else None
+    if not new_vol:
+        return {
+            "kind": "short_answer",
+            "summary": "Include the measured spill volume in bbl.",
+            "visuals": [],
+        }
 
-    insp = db.execute(
-        select(models.Inspection)
-        .where(
-            models.Inspection.asset_id == asset_id,
-            models.Inspection.inspected_at >= datetime(2026, 9, 24, tzinfo=as_of.tzinfo),
-            models.Inspection.inspected_at < datetime(2026, 9, 25, tzinfo=as_of.tzinfo),
-        )
-        .limit(1)
-    ).scalar_one_or_none()
+    # Resolve spill date from text when present (e.g. "24 Sep"), else latest spill detection
+    insp = None
+    date_m = re.search(
+        r"(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s*(20\d{2})?",
+        text,
+        re.I,
+    )
+    if date_m:
+        months = {
+            "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
+            "jul": 7, "aug": 8, "sep": 9, "sept": 9, "oct": 10, "nov": 11, "dec": 12,
+        }
+        day = int(date_m.group(1))
+        mon_key = date_m.group(2).lower()[:4]
+        if mon_key.startswith("sept"):
+            mon = 9
+        else:
+            mon = months[date_m.group(2).lower()[:3]]
+        year = int(date_m.group(3)) if date_m.group(3) else as_of.year
+        day_start = datetime(year, mon, day, tzinfo=as_of.tzinfo)
+        day_end = day_start + timedelta(days=1)
+        insp = db.execute(
+            select(models.Inspection)
+            .where(
+                models.Inspection.asset_id == asset_id,
+                models.Inspection.inspected_at >= day_start,
+                models.Inspection.inspected_at < day_end,
+                models.Inspection.spill_detected.is_(True),
+            )
+            .limit(1)
+        ).scalar_one_or_none()
+    if insp is None:
+        insp = db.execute(
+            select(models.Inspection)
+            .where(
+                models.Inspection.asset_id == asset_id,
+                models.Inspection.spill_detected.is_(True),
+                models.Inspection.inspected_at <= as_of,
+            )
+            .order_by(models.Inspection.inspected_at.desc())
+            .limit(1)
+        ).scalar_one_or_none()
     preview = preview_feedback(
         db,
         kind="detection_correction",
@@ -1235,7 +1368,7 @@ def _handle_yesterday_recall(
             "summary": (
                 f"I don’t have an earlier multi-well discussion with {who} to recall. "
                 f"Private chats stay with each user — I won’t use someone else’s history. "
-                f"Name the wells explicitly (e.g. WELL-0121, WELL-0107, WELL-0138), "
+                f"Name the wells explicitly (for example WELL-0001), "
                 f"or discuss them first in this user’s own chat."
             ),
             "visuals": [],

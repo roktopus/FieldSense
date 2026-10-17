@@ -1,0 +1,51 @@
+as_of: "2027-01-15T00:00:00Z"
+reset: true
+turns:
+  - user_id: U-601
+    session: new
+    session_key: nathan_a
+    text: >
+      WELL-0333's recalled pump was swapped out yesterday. The work order isn't in the
+      system yet. Please count it as replaced from now on.
+    expect:
+      kind: short_answer
+      summary_contains:
+        - "WELL-0333"
+        - "replaced"
+  - user_id: U-601
+    session: same
+    session_key: nathan_a
+    text: >
+      Also, just for me: whenever you list wells, sort them by area and then by well ID,
+      and show costs in thousands of dollars.
+    expect:
+      kind: short_answer
+      summary_contains:
+        - "private"
+  - user_id: U-301
+    session: new
+    text: Which recalled pumps are still in the ground right now?
+    expect:
+      kind: table
+      row_fields: [asset_id, area_name, lot, provenance]
+      summary_contains:
+        - "recalled"
+  - user_id: U-501
+    session: new
+    text: >
+      Nathan told me the recalled pump on WELL-0577 was swapped as well. Take it off the
+      recall list.
+    expect:
+      kind: short_answer
+      summary_contains:
+        - "WELL-0577"
+      has_conflicts: true
+  - user_id: U-601
+    session: new
+    text: >
+      Show me the recalled pumps that are still in the ground in my area, and what it cost
+      to install each one.
+    expect:
+      kind: table
+      summary_contains:
+        - "recalled"

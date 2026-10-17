@@ -3,19 +3,60 @@
 @tailwind utilities;
 
 :root {
-  --fs-bg: #eef3f7;
-  --fs-accent: #0f766e;
-  --fs-sidebar: #0b1f33;
+  --fs-pine: #0b2420;
+  --fs-pine-mid: #143832;
+  --fs-copper: #c46b2d;
+  --fs-copper-deep: #9a5222;
+  --fs-moss: #1a7a6d;
+  --fs-stone: #e8ece9;
+  --fs-paper: #f7f8f6;
+  --fs-ink: #14201c;
+  --fs-mute: #5c6b64;
+  --fs-warn: #b45309;
+  --fs-danger: #b42318;
+  --fs-ok: #0f6b4c;
+  --fs-focus: rgba(196, 107, 45, 0.35);
+  --fs-border: rgba(20, 32, 28, 0.1);
+  --fs-bg: var(--fs-stone);
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
 }
 
 body {
   margin: 0;
-  font-family: "IBM Plex Sans", system-ui, sans-serif;
-  color: #0f172a;
+  font-family: "Figtree", system-ui, sans-serif;
+  color: var(--fs-ink);
+  background-color: var(--fs-stone);
+  background-image:
+    radial-gradient(900px 420px at 92% -8%, rgba(196, 107, 45, 0.09), transparent 55%),
+    radial-gradient(700px 380px at -5% 0%, rgba(26, 122, 109, 0.08), transparent 50%),
+    linear-gradient(rgba(20, 32, 28, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(20, 32, 28, 0.03) 1px, transparent 1px);
+  background-size: auto, auto, 28px 28px, 28px 28px;
+  background-position: 0 0, 0 0, 0 0, 0 0;
+}
+
+::selection {
+  background: rgba(196, 107, 45, 0.22);
+}
+
+:focus-visible {
+  outline: 2px solid var(--fs-copper);
+  outline-offset: 2px;
+}
+
+.fs-sidebar {
   background:
-    radial-gradient(1200px 480px at 80% -10%, rgba(15, 118, 110, 0.07), transparent 55%),
-    radial-gradient(900px 400px at 0% 0%, rgba(3, 105, 161, 0.05), transparent 50%),
-    var(--fs-bg);
+    radial-gradient(480px 280px at 10% -10%, rgba(196, 107, 45, 0.18), transparent 60%),
+    linear-gradient(180deg, #12332d 0%, var(--fs-pine) 45%, #081916 100%);
+}
+
+.fs-brand-mark {
+  letter-spacing: -0.03em;
 }
 
 .leaflet-container {
@@ -36,7 +77,7 @@ body {
   width: 6px;
   height: 6px;
   border-radius: 999px;
-  background: #0f766e;
+  background: var(--fs-copper);
   animation: fs-pulse 1s ease-in-out infinite;
 }
 

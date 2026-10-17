@@ -1,0 +1,14 @@
+as_of: "2027-01-15T00:00:00Z"
+reset: true
+turns:
+  - user_id: U-402
+    session: new
+    text: >
+      Across all areas, which temporary flowline bypasses are in place right now, and is each
+      one allowed? Also list any bypass, past or present, that stayed in after its approval ran
+      out or was never approved at all.
+    expect:
+      kind: table
+      row_fields: [asset_id, area_name, bypass_in, bypass_out, approval, status]
+      summary_contains:
+        - "bypass"

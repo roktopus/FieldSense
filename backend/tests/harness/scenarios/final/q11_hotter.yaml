@@ -1,0 +1,12 @@
+as_of: "2027-01-15T00:00:00Z"
+reset: true
+turns:
+  - user_id: U-501
+    session: new
+    text: Which region of the field consistently runs hotter?
+    expect:
+      kind: bar_chart
+      visual_kinds: [bar_chart]
+      row_fields: [area_name, mean_delta_c]
+      summary_contains:
+        - "hot"
