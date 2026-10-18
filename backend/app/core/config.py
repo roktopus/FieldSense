@@ -15,10 +15,14 @@ class Settings(BaseSettings):
     # sample profile default; test profile uses 2027-01-15 via env
     evaluation_as_of: str = "2026-10-16T00:00:00Z"
     app_timezone: str = "UTC"
+    # llm: model plans tool calls and writes the summary. router: optional offline phrase router.
+    answer_mode: Literal["llm", "router"] = "llm"
     model_provider: str = "openai_compatible"
     model_base_url: str = ""
     model_api_key: str = ""
     model_name: str = ""
+    # Gemini API key for MODEL_PROVIDER=google (Gemma). https://aistudio.google.com/apikey
+    gemini_api_key: str = ""
     demo_user_picker_enabled: bool = True
     tool_call_limit: int = 8
     agent_max_result_rows: int = 500

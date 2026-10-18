@@ -6,20 +6,14 @@ alwaysApply: false
 
 # FieldSense frontend UI
 
-Follow `docs/UI_GUIDELINES.md` (theme “Wellhead”, checklist, voice dictionary).
+The screen is described in `docs/PRODUCT.md`.
 
 ## Non-negotiables
 
-- Tokens only: pine / copper / moss / stone / paper from CSS + Tailwind — no purple SaaS glow, no cream+terracotta poster look, no Inter/Roboto brand face.
-- Brand “FieldSense” stays the strongest chrome signal; Fraunces display + Figtree body.
-- Coverage refusals: summary + “We don’t have this data” — never an empty Results table (`rows` empty/null + `coverage.status === unsupported`).
-- Chrome copy is operator-friendly (Who’s asking, Answer as of, See sources, New conversation). Keep API jargon out of labels.
-- Question catalog: HOST tab = official test-data Q1–Q11 (copper); OURS = FieldSense showcase (moss). Keep them visually distinct.
-- Cards only for interactive answer surfaces; empty state = title + one sentence + suggestion grid.
-- Motion: message enter, suggestion hover, loading pulse — purposeful, not noisy.
-
-## When editing UI
-
-1. Extend `--fs-*` tokens rather than hard-coding hex in JSX.
-2. Add human `COL_LABELS` for any new table fields.
-3. If you change a pattern, update `docs/UI_GUIDELINES.md`.
+- Night-lease tokens from CSS and Tailwind (`--fs-*`). Figtree for type. No second brand palette.
+- FieldSense is the product name. **Wells Bennett** is the well analyst in the thread.
+- The opening view is Wells Bennett. Host and showcase questions stay in the Questions toolbar.
+- The window fits the viewport. Long answers and the question list scroll inside their own panes.
+- Coverage refusals are summary text only. Do not render an empty results table when `coverage.status` is unsupported.
+- Chrome copy is operator language: Who’s asking, Answer as of, See sources, New conversation.
+- Spill maps use the shared OpenStreetMap helper in `frontend/src/OsmMap.tsx`.

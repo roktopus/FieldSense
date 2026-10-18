@@ -35,10 +35,12 @@ services:
       APP_ENV: ${APP_ENV:-development}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       DEMO_USER_PICKER_ENABLED: ${DEMO_USER_PICKER_ENABLED:-true}
-      MODEL_PROVIDER: ${MODEL_PROVIDER:-openai_compatible}
+      ANSWER_MODE: ${ANSWER_MODE:-llm}
+      MODEL_PROVIDER: ${MODEL_PROVIDER:-google}
       MODEL_BASE_URL: ${MODEL_BASE_URL:-}
       MODEL_API_KEY: ${MODEL_API_KEY:-}
-      MODEL_NAME: ${MODEL_NAME:-}
+      MODEL_NAME: ${MODEL_NAME:-gemma-4-26b-a4b-it}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
     ports:
       - "8000:8000"
     volumes:

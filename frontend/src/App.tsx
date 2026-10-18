@@ -1,7 +1,10 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Answer, User, api } from "./api";
 import { FieldSenseLogo } from "./FieldSenseLogo";
-import { IconBot, IconEvidence, IconSend, IconSpark, IconUser, IconX } from "./icons";
+import { IconEvidence, IconSend, IconUser, IconX } from "./icons";
+import { WellsMark } from "./motion/WellsMark";
+import { ParticleField } from "./motion/ParticleField";
+import { WELLS } from "./persona";
 import { QuestionCatalog } from "./QuestionCatalog";
 import type { CatalogQuestion, CatalogTurn } from "./promptCatalog";
 import { VisualRenderer } from "./Visuals";
@@ -46,9 +49,11 @@ export default function App() {
   const [asOf, setAsOf] = useState(
     () => localStorage.getItem("fieldsense_as_of") || "2027-01-15T00:00:00Z",
   );
-  const [showCatalog, setShowCatalog] = useState(true);
+  const [questionsOpen, setQuestionsOpen] = useState(false);
   const [scriptCue, setScriptCue] = useState<ScriptCue | null>(null);
   const skipUserResetRef = useRef(false);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const activeUser = useMemo(() => users.find((u) => u.user_id === userId), [users, userId]);
 
@@ -91,15 +96,15 @@ export default function App() {
     setConversationId(null);
     setMessages([]);
     setEvidence(null);
-    setShowCatalog(true);
+    setQuestionsOpen(false);
     setScriptCue(null);
   }, [userId]);
 
   function goHome() {
-    setShowCatalog(true);
     setConversationId(null);
     setMessages([]);
     setEvidence(null);
+    setQuestionsOpen(false);
     setScriptCue(null);
     setError(null);
     setInput("");
@@ -111,7 +116,7 @@ export default function App() {
     setConversationId(c.id);
     setMessages([]);
     setEvidence(null);
-    setShowCatalog(true);
+    setQuestionsOpen(false);
     setScriptCue(null);
     const list = await api.conversations(userId);
     setConversations(list.conversations);
@@ -120,7 +125,7 @@ export default function App() {
   async function openChat(id: string) {
     if (!userId) return;
     setConversationId(id);
-    setShowCatalog(false);
+    setQuestionsOpen(false);
     setScriptCue(null);
     const c = await api.getConversation(userId, id);
     setMessages(
@@ -140,7 +145,7 @@ export default function App() {
   ) {
     setError(null);
     setLoading(true);
-    setShowCatalog(false);
+    setQuestionsOpen(false);
     try {
       await api.selectUser(uid);
       let cid = opts.newSession ? null : opts.reuseConversationId ?? null;
@@ -223,17 +228,30 @@ export default function App() {
     }
   }
 
-  const browsingCatalog = showCatalog || !messages.length;
+  useEffect(() => {
+    const pane = scrollerRef.current;
+    if (!pane || !messages.length) return;
+    pane.scrollTop = pane.scrollHeight;
+  }, [messages, loading]);
+
+  function mentionArea(name: string) {
+    setInput((prev) => {
+      if (prev.includes(name)) return prev;
+      if (!prev.trim()) return `In ${name}, `;
+      return `${prev.trim()} — ${name}. `;
+    });
+    inputRef.current?.focus();
+  }
 
   return (
-    <div className="flex min-h-screen font-body text-ink">
-      <aside className="fs-sidebar flex w-[272px] shrink-0 flex-col text-stone/95">
+    <div className="flex h-dvh overflow-hidden font-body text-ink">
+      <aside className="fs-sidebar flex h-full w-[272px] shrink-0 flex-col overflow-hidden border-r border-white/10 text-white">
         <div className="border-b border-white/10 px-4 py-4">
           <button
             type="button"
             onClick={goHome}
             className="group w-full rounded-[12px] px-1 py-1 text-left transition hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-copper"
-            aria-label="FieldSense home — open question catalog"
+            aria-label="FieldSense home"
             title="Home"
           >
             <FieldSenseLogo className="transition group-hover:opacity-95" />
@@ -244,24 +262,18 @@ export default function App() {
             type="button"
             onClick={() => void newChat()}
             disabled={!userId}
-            className="w-full rounded-[10px] bg-copper px-3 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-copper-deep disabled:cursor-not-allowed disabled:opacity-40"
+            className="w-full rounded-lg bg-white px-3 py-2.5 text-sm font-semibold text-black transition hover:bg-neutral-200 disabled:cursor-not-allowed disabled:opacity-40"
           >
             New conversation
           </button>
-          <button
-            type="button"
-            onClick={() => setShowCatalog(true)}
-            className="w-full rounded-[10px] border border-white/15 bg-white/5 px-3 py-2 text-sm font-medium text-stone/90 transition hover:bg-white/10"
-          >
-            Question catalog
-          </button>
         </div>
-        <div className="px-4 pb-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-stone/45">
+        <LeasePlat areas={areas} onPick={mentionArea} />
+        <div className="px-4 pb-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">
           Recent questions
         </div>
-        <div className="flex-1 overflow-y-auto px-2 py-1">
+        <div className="min-h-0 flex-1 overflow-y-auto px-2 py-1">
           {conversations.length === 0 ? (
-            <p className="px-2 py-3 text-xs leading-relaxed text-stone/45">
+            <p className="px-2 py-3 text-xs leading-relaxed text-white/60">
               Your questions will show up here.
             </p>
           ) : (
@@ -271,9 +283,9 @@ export default function App() {
                 type="button"
                 onClick={() => void openChat(c.id)}
                 className={`mb-0.5 w-full rounded-[10px] px-3 py-2.5 text-left text-sm leading-snug transition ${
-                  conversationId === c.id && !showCatalog
+                  conversationId === c.id
                     ? "bg-white/12 text-white"
-                    : "text-stone/80 hover:bg-white/8 hover:text-white"
+                    : "text-white/75 hover:bg-white/8 hover:text-white"
                 }`}
               >
                 {c.title}
@@ -281,27 +293,14 @@ export default function App() {
             ))
           )}
         </div>
-        <div className="border-t border-white/10 px-4 py-4">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-stone/45">
-            Field areas
-          </div>
-          <ul className="mt-2 space-y-1.5 text-sm text-stone/75">
-            {areas.map((a) => (
-              <li key={a.area_id} className="flex items-center gap-2">
-                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-copper/80" />
-                {a.name}
-              </li>
-            ))}
-          </ul>
-        </div>
       </aside>
 
-      <main className="flex min-w-0 flex-1 flex-col">
-        <header className="flex flex-wrap items-center gap-3 border-b border-[var(--fs-border)] bg-paper/90 px-5 py-3 backdrop-blur-md">
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <header className="flex shrink-0 flex-wrap items-center gap-3 border-b border-[var(--fs-border)] bg-paper px-5 py-3">
           <label className="flex items-center gap-2 text-sm">
             <span className="text-mute">Who&apos;s asking</span>
             <select
-              className="rounded-[10px] border border-[var(--fs-border)] bg-white px-2.5 py-1.5 text-ink shadow-soft"
+              className="rounded-md border border-[var(--fs-border)] bg-paper px-2.5 py-1.5 text-ink"
               value={userId}
               onChange={(e) => setUserId(e.target.value)}
             >
@@ -316,7 +315,7 @@ export default function App() {
           <label className="flex items-center gap-2 text-sm">
             <span className="text-mute">Answer as of</span>
             <input
-              className="rounded-[10px] border border-[var(--fs-border)] bg-white px-2.5 py-1.5 font-mono text-xs text-ink shadow-soft"
+              className="rounded-md border border-[var(--fs-border)] bg-paper px-2.5 py-1.5 font-mono text-xs text-ink"
               value={asOf}
               onChange={(e) => setAsOf(e.target.value)}
               aria-label="Analysis date and time"
@@ -334,31 +333,19 @@ export default function App() {
           )}
         </header>
 
-        <div className="flex flex-1 overflow-hidden">
-          <section className="flex min-w-0 flex-1 flex-col">
-            <div className="flex-1 space-y-5 overflow-y-auto px-5 py-7">
-              {browsingCatalog ? (
-                <div>
-                  <Empty
-                    title="Question catalog"
-                    body={
-                      userId
-                        ? "Copper = official FlytBase test-data questions for host submission. Moss = FieldSense showcase demos."
-                        : "Pick a host question — we’ll sign in as the named asker automatically. Or choose who’s asking above first."
-                    }
-                  />
-                  <div className="mt-6">
-                    <QuestionCatalog
-                      disabled={loading}
-                      onAskTurn={(turn, q) => void askCatalogTurn(turn, q)}
-                    />
-                  </div>
-                </div>
-              ) : !userId ? (
-                <Empty
-                  title="Choose who you are"
-                  body="Pick a person above, or open the question catalog and ask a host turn (it selects the asker for you)."
-                />
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          <section className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+            <ParticleField />
+            <div
+              ref={scrollerRef}
+              className={
+                messages.length
+                  ? "relative z-10 min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-6"
+                  : "relative z-10 flex min-h-0 flex-1 items-center justify-center overflow-hidden px-6"
+              }
+            >
+              {!messages.length ? (
+                <WellsHero signedIn={Boolean(userId)} />
               ) : (
                 <>
                   {scriptCue ? (
@@ -380,7 +367,7 @@ export default function App() {
                           type="button"
                           disabled={loading}
                           onClick={() => void askCatalogTurn(scriptCue.nextTurn, scriptCue.question)}
-                          className="rounded-[10px] bg-copper px-3 py-2 text-xs font-semibold text-white hover:bg-copper-deep disabled:opacity-40"
+                          className="rounded-md bg-white px-3 py-2 text-xs font-semibold text-black hover:bg-neutral-200 disabled:opacity-40"
                         >
                           Ask next turn
                         </button>
@@ -397,20 +384,22 @@ export default function App() {
                   {messages.map((m) =>
                     m.role === "user" ? (
                       <div key={m.id} className="animate-fs-enter flex justify-end gap-2.5">
-                        <div className="max-w-2xl rounded-[14px] rounded-br-md bg-copper-soft px-4 py-3 text-sm leading-relaxed text-ink">
+                        <div className="max-w-2xl rounded-md bg-white/8 px-4 py-3 text-sm leading-relaxed text-ink ring-1 ring-white/10">
                           {m.content}
                         </div>
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-copper text-white shadow-soft">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-black">
                           <IconUser size={16} />
                         </div>
                       </div>
                     ) : (
-                      <div key={m.id} className="animate-fs-enter flex justify-start gap-2.5">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-pine text-copper-soft shadow-soft">
-                          <IconBot size={16} />
-                        </div>
+                      <div key={m.id} className="animate-fs-enter flex items-start gap-3">
+                        <WellsMark />
                         <div className="min-w-0 max-w-4xl flex-1">
-                          <div className="rounded-[14px] rounded-bl-md border border-[var(--fs-border)] bg-paper px-4 py-3.5 shadow-soft">
+                          <div className="mb-1.5 flex items-baseline gap-2">
+                            <span className="text-sm font-semibold text-ink">{WELLS.name}</span>
+                            <span className="text-[11px] uppercase tracking-[0.14em] text-mute">{WELLS.role}</span>
+                          </div>
+                          <div className="rounded-md border border-[var(--fs-border)] bg-paper/90 px-4 py-3.5">
                             <p className="text-[15px] leading-relaxed text-ink">{m.content}</p>
                             {m.answer ? (
                               <VisualRenderer
@@ -426,22 +415,15 @@ export default function App() {
                 </>
               )}
               {loading ? (
-                <div className="flex items-center gap-2.5" aria-live="polite">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-pine text-copper-soft">
-                    <IconBot size={16} />
-                  </div>
-                  <div className="inline-flex items-center gap-2 rounded-[14px] border border-[var(--fs-border)] bg-paper px-4 py-3 text-sm text-mute shadow-soft">
-                    <span className="fs-dot-pulse" aria-hidden>
-                      <i />
-                      <i />
-                      <i />
-                    </span>
-                    Checking inspections and notes…
-                  </div>
+                <div className="flex items-center gap-3 text-sm text-mute" aria-live="polite">
+                  <WellsMark />
+                  <span>
+                    <span className="font-semibold text-ink">{WELLS.name}</span> is checking inspections and notes…
+                  </span>
                 </div>
               ) : null}
               {error ? (
-                <div className="flex items-start gap-2 rounded-[14px] bg-rose-50 px-3.5 py-3 text-sm text-[var(--fs-danger)] ring-1 ring-rose-100">
+                <div className="flex items-start gap-2 rounded-md bg-[#2a1216] px-3.5 py-3 text-sm text-[var(--fs-danger)] ring-1 ring-[#ff6b81]/30">
                   <IconX size={16} className="mt-0.5 shrink-0" />
                   <span>{error}</span>
                 </div>
@@ -450,12 +432,13 @@ export default function App() {
 
             <form
               onSubmit={onSubmit}
-              className="border-t border-[var(--fs-border)] bg-paper/95 p-4 backdrop-blur-md"
+              className="shrink-0 border-t border-[var(--fs-border)] bg-paper/95 p-4 backdrop-blur-md"
             >
               <div className="mx-auto flex max-w-3xl gap-2">
                 <textarea
-                  className="min-h-[56px] flex-1 resize-y rounded-[14px] border border-[var(--fs-border)] bg-white px-3.5 py-3 text-sm text-ink shadow-soft outline-none transition placeholder:text-mute/70 focus:border-copper/50 focus:ring-2 focus:ring-[var(--fs-focus)]"
-                  placeholder="Ask about wells, safety, recalls, or what’s holding up repairs…"
+                  ref={inputRef}
+                  className="h-14 flex-1 resize-none rounded-md border border-[var(--fs-border)] bg-paper px-3.5 py-3 text-sm text-ink outline-none transition placeholder:text-mute/70 focus:border-white/40"
+                  placeholder={`Ask ${WELLS.name} about a well, a spill, or what’s holding up a repair…`}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => {
@@ -469,7 +452,7 @@ export default function App() {
                 <button
                   type="submit"
                   disabled={!userId || loading || !input.trim()}
-                  className="inline-flex items-center gap-1.5 self-end rounded-[14px] bg-copper px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-copper-deep disabled:opacity-40"
+                  className="inline-flex items-center gap-1.5 self-end rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-black transition duration-150 hover:bg-neutral-200 active:opacity-80 disabled:opacity-40"
                 >
                   <IconSend size={16} />
                   Ask
@@ -478,8 +461,15 @@ export default function App() {
             </form>
           </section>
 
+          <QuestionRail
+            open={questionsOpen}
+            onToggle={() => setQuestionsOpen((open) => !open)}
+            disabled={loading}
+            onAskTurn={(turn, q) => void askCatalogTurn(turn, q)}
+          />
+
           {evidence ? (
-            <aside className="flex w-[400px] shrink-0 flex-col border-l border-[var(--fs-border)] bg-paper">
+            <aside className="flex min-h-0 w-[400px] shrink-0 flex-col border-l border-[var(--fs-border)] bg-paper">
               <div className="flex items-center justify-between border-b border-[var(--fs-border)] px-4 py-3">
                 <h2 className="flex items-center gap-2 font-display text-lg font-semibold tracking-tight">
                   <span className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-moss-soft text-moss">
@@ -498,7 +488,7 @@ export default function App() {
                   Close
                 </button>
               </div>
-              <div className="flex-1 overflow-y-auto p-4">
+              <div className="min-h-0 flex-1 overflow-y-auto p-4">
                 {!evidence.length ? (
                   <div className="rounded-[14px] border border-dashed border-[var(--fs-border)] bg-stone/60 px-4 py-8 text-center text-sm text-mute">
                     No linked source records for this answer. The summary still stands — try a
@@ -519,7 +509,7 @@ export default function App() {
                       return (
                         <li
                           key={i}
-                          className="rounded-[14px] border border-[var(--fs-border)] bg-white p-3 text-sm shadow-soft"
+                          className="rounded-md border border-[var(--fs-border)] bg-paper p-3 text-sm"
                         >
                           <div className="flex flex-wrap items-center gap-2">
                             <span
@@ -562,14 +552,138 @@ export default function App() {
   );
 }
 
-function Empty({ title, body }: { title: string; body: string }) {
+type Area = { area_id: string; name: string };
+
+const QUADS: Array<{ key: "NW" | "NE" | "SW" | "SE"; label: string }> = [
+  { key: "NW", label: "Northwest" },
+  { key: "NE", label: "Northeast" },
+  { key: "SW", label: "Southwest" },
+  { key: "SE", label: "Southeast" },
+];
+
+function quadrantOf(name: string): "NW" | "NE" | "SW" | "SE" | null {
+  const n = name.toLowerCase();
+  if (n.includes("northeast")) return "NE";
+  if (n.includes("northwest")) return "NW";
+  if (n.includes("southeast")) return "SE";
+  if (n.includes("southwest")) return "SW";
+  return null;
+}
+
+function blockLabel(name: string): string {
+  const match = name.match(/block\s+\d+/i);
+  if (!match) return name;
+  return match[0].replace(/block/i, "Block");
+}
+
+function LeasePlat({ areas, onPick }: { areas: Area[]; onPick: (name: string) => void }) {
+  const groups: Record<"NW" | "NE" | "SW" | "SE", Area[]> = { NW: [], NE: [], SW: [], SE: [] };
+  const other: Area[] = [];
+  for (const area of areas) {
+    const quad = quadrantOf(area.name);
+    if (quad) groups[quad].push(area);
+    else other.push(area);
+  }
+  for (const key of Object.keys(groups) as Array<keyof typeof groups>) {
+    groups[key].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  }
+
   return (
-    <div className="mx-auto max-w-xl px-2 text-center">
-      <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-pine text-copper-soft shadow-lift">
-        <IconSpark size={24} />
+    <div className="px-3 pb-3">
+      <div className="mb-2 flex items-baseline justify-between px-1">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">Lease</span>
+        <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/45">North</span>
       </div>
-      <h2 className="font-display text-[1.75rem] font-semibold tracking-tight text-ink">{title}</h2>
-      <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-mute">{body}</p>
+      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-white/20 bg-white/20">
+        {QUADS.map((quad) => (
+          <div key={quad.key} className="min-h-[72px] bg-[#161310] px-2 py-1.5">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-white/55">{quad.label}</div>
+            <div className="mt-1 space-y-0.5">
+              {groups[quad.key].map((area) => (
+                <button
+                  key={area.area_id}
+                  type="button"
+                  title={`Ask about ${area.name}`}
+                  onClick={() => onPick(area.name)}
+                  className="block w-full rounded px-1 py-0.5 text-left text-xs font-medium text-white transition hover:bg-white/10"
+                >
+                  {blockLabel(area.name)}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      {other.map((area) => (
+        <button
+          key={area.area_id}
+          type="button"
+          onClick={() => onPick(area.name)}
+          className="mt-1 w-full rounded px-2 py-1 text-left text-xs text-white hover:bg-white/10"
+        >
+          {area.name}
+        </button>
+      ))}
     </div>
+  );
+}
+
+function WellsHero({ signedIn }: { signedIn: boolean }) {
+  return (
+    <div className="flex max-w-md flex-col items-center text-center">
+      <div className="rounded-full bg-white/6 p-3 ring-1 ring-white/20">
+        <WellsMark size="hero" />
+      </div>
+      <h2 className="mt-5 text-[40px] font-semibold leading-none tracking-tight text-ink">{WELLS.name}</h2>
+      <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-mute">{WELLS.role}</p>
+      <p className="mt-4 max-w-sm text-sm leading-relaxed text-mute">{WELLS.line}</p>
+      {signedIn ? null : (
+        <p className="mt-3 text-xs text-mute">Choose who’s asking above, then ask {WELLS.name}.</p>
+      )}
+    </div>
+  );
+}
+
+function QuestionRail({
+  open,
+  onToggle,
+  disabled,
+  onAskTurn,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  disabled: boolean;
+  onAskTurn: (turn: CatalogTurn, question: CatalogQuestion) => void;
+}) {
+  if (!open) {
+    return (
+      <aside className="flex w-12 shrink-0 flex-col border-l border-[var(--fs-border)] bg-paper">
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={false}
+          aria-label="Open questions"
+          className="flex flex-1 items-center justify-center text-[11px] font-semibold uppercase tracking-[0.22em] text-ink hover:bg-white/5"
+        >
+          <span className="[writing-mode:vertical-rl]">Questions</span>
+        </button>
+      </aside>
+    );
+  }
+  return (
+    <aside className="flex min-h-0 w-[360px] shrink-0 flex-col border-l border-[var(--fs-border)] bg-paper">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded
+        className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--fs-border)] px-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-ink"
+      >
+        Questions
+        <span className="text-mute">Close</span>
+      </button>
+      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        <QuestionCatalog disabled={disabled} onAskTurn={onAskTurn} />
+      </div>
+    </aside>
   );
 }

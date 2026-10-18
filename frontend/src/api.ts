@@ -80,7 +80,13 @@ export const api = {
       userId,
     ),
   areas: () => req<{ areas: Array<{ area_id: string; name: string }> }>("/api/v1/areas"),
-  importLatest: () => req<Record<string, unknown>>("/api/v1/import/latest"),
+  importLatest: () =>
+    req<{
+      status: string;
+      dataset_version?: string | null;
+      evaluation_as_of?: string;
+      dataset_profile?: string;
+    }>("/api/v1/import/latest"),
   wells: (q = "") =>
     req<{ wells: Array<{ asset_id: string; name: string; well_type: string }> }>(
       `/api/v1/wells?q=${encodeURIComponent(q)}`,

@@ -17,6 +17,7 @@ dependencies = [
   "sse-starlette>=2.1.0",
   "orjson>=3.10.0",
   "pyyaml>=6.0.0",
+  "google-genai>=1.0.0",
 ]
 
 [project.optional-dependencies]

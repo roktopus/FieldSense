@@ -12,8 +12,10 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
+import { CircleMarker, MapContainer, Popup, TileLayer } from "react-leaflet";
+import { MapReady, OSM_TILES, wellMarker } from "./OsmMap";
 import type { Answer } from "./api";
+import { InsightBoard } from "./insights";
 import {
   IconAlert,
   IconCalendar,
@@ -109,7 +111,7 @@ function StatusBadge({ status }: { status?: string }) {
   }
   if (s === "not_producing") {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-md bg-rose-50 px-2 py-1 text-xs font-semibold text-[var(--fs-danger)] ring-1 ring-rose-200/80">
+      <span className="inline-flex items-center gap-1.5 rounded-md bg-[#2a1216] px-2 py-1 text-xs font-semibold text-[var(--fs-danger)] ring-1 ring-[#ff6b81]/40">
         <IconX size={14} className="text-[var(--fs-danger)]" />
         Not producing
       </span>
@@ -135,7 +137,7 @@ function Panel({
   children: ReactNode;
 }) {
   return (
-    <div className="overflow-hidden rounded-[14px] border border-[var(--fs-border)] bg-white shadow-soft">
+    <div className="overflow-hidden rounded-md border border-[var(--fs-border)] bg-paper">
       <div className="flex items-center gap-2.5 border-b border-[var(--fs-border)] bg-paper/90 px-4 py-2.5">
         <span className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-moss-soft text-moss">
           {icon}
@@ -165,7 +167,7 @@ export function VisualRenderer({ answer, onOpenEvidence }: Props) {
   if (!visuals.length && rows.length > 0 && !shortOnly) {
     return (
       <div className="mt-3 space-y-3">
-        <DataTable rows={rows} />
+        <InsightBoard rows={rows} />
         <AnswerFooter answer={answer} onOpenEvidence={onOpenEvidence} />
       </div>
     );
@@ -178,14 +180,7 @@ export function VisualRenderer({ answer, onOpenEvidence }: Props) {
         if (kind === "status_card") return <StatusCard key={idx} answer={answer} />;
         if (kind === "table") {
           if (!rows.length) return null;
-          return (
-            <DataTable
-              key={idx}
-              title={String(v.title || "Matching wells")}
-              rows={rows}
-              fields={(v.fields as string[] | undefined) || undefined}
-            />
-          );
+          return <InsightBoard key={idx} title={String(v.title || "Records")} rows={rows} />;
         }
         if (kind === "bar_chart")
           return (
@@ -250,11 +245,11 @@ export function VisualRenderer({ answer, onOpenEvidence }: Props) {
         </div>
       ) : null}
       {(answer.conflicts as unknown[] | undefined)?.length ? (
-        <div className="flex gap-3 rounded-[14px] border border-amber-200 bg-amber-50/90 p-3.5 text-sm">
+        <div className="flex gap-3 rounded-md border border-[#f0b429]/40 bg-[#2a220f] p-3.5 text-sm text-[#f6e7c1]">
           <IconAlert className="mt-0.5 shrink-0 text-[var(--fs-warn)]" />
           <div>
-            <div className="font-semibold text-amber-950">Sources disagree</div>
-            <ul className="mt-1 list-inside list-disc text-xs text-amber-950/90">
+            <div className="font-semibold">Sources disagree</div>
+            <ul className="mt-1 list-inside list-disc text-xs">
               {(answer.conflicts as Array<Record<string, unknown>>).map((c, i) => (
                 <li key={i}>{String(c.message || c.type || JSON.stringify(c))}</li>
               ))}
@@ -334,7 +329,7 @@ function StatusCard({ answer }: { answer: Answer }) {
       <div className="grid gap-3 sm:grid-cols-3">
         <div
           className={`rounded-xl p-3 ring-1 ${
-            notProd ? "bg-rose-50/80 ring-rose-100" : "bg-emerald-50/80 ring-emerald-100"
+            notProd ? "bg-[#2a1216] ring-[#ff6b81]/30" : "bg-[#10241a] ring-[#3dd68c]/30"
           }`}
         >
           <div className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-mute">
@@ -348,7 +343,7 @@ function StatusCard({ answer }: { answer: Answer }) {
           <div className="mt-1 text-xs text-mute">Threshold {data.threshold_c ?? "—"} °C</div>
         </div>
 
-        <div className="rounded-xl bg-white p-3 ring-1 ring-[var(--fs-border)]">
+        <div className="rounded-md bg-paper p-3 ring-1 ring-[var(--fs-border)]">
           <div className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-mute">
             <IconCalendar size={14} />
             Last inspection
@@ -516,7 +511,7 @@ function formatCell(v: unknown): string {
   return String(v);
 }
 
-const BAR_COLORS = ["#1a7a6d", "#c46b2d", "#0b2420", "#5c6b64", "#9a5222"];
+const BAR_COLORS = ["#f2f2f2", "#3dd68c", "#b0b0b0", "#ff6b81", "#e6c15a"];
 
 function BarBlock({ title, rows }: { title: string; rows: Record<string, unknown>[] }) {
   const valueKey = rows[0]?.mean_delta_c != null ? "mean_delta_c" : "downtime_days";
@@ -692,19 +687,25 @@ function MapBlock({ pins }: { pins: Record<string, unknown>[] }) {
     <div className="space-y-3">
       <Panel icon={<IconMap size={18} />} title="Spill map" meta={`${pins.length} wells`}>
         <MapContainer center={[lat, lon]} zoom={11} scrollWheelZoom={false}>
+          <MapReady />
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            url={OSM_TILES}
           />
           {pins.map((p) => (
-            <Marker key={String(p.asset_id)} position={[Number(p.lat), Number(p.lon)]}>
+            <CircleMarker
+              key={String(p.asset_id)}
+              center={[Number(p.lat), Number(p.lon)]}
+              radius={8}
+              pathOptions={wellMarker}
+            >
               <Popup>
                 <strong className="font-mono">{String(p.asset_id)}</strong>
                 <div className="mt-1 text-xs text-mute">
                   {Array.isArray(p.events) ? `${(p.events as unknown[]).length} event(s)` : ""}
                 </div>
               </Popup>
-            </Marker>
+            </CircleMarker>
           ))}
         </MapContainer>
       </Panel>

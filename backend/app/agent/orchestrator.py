@@ -9,7 +9,9 @@ from sqlalchemy.orm import Session
 
 from app.agent.evidence_synth import enrich_answer_evidence
 from app.agent.intents import try_capability_route
+from app.agent.llm_answer import answer_with_model
 from app.agent.resolve import match_area
+from app.core.config import get_settings
 from app.analytics import queries
 from app.analytics.rca import wells_needing_rca
 from app.compliance.assess import assess_containment_breaches, assess_well_compliance
@@ -64,7 +66,25 @@ def run_question(
 
     try:
         _emit(progress, "run.progress", {"stage": "resolving", "run_id": str(run.id)})
-        answer = _route(db, text=text, user_id=user_id, conversation_id=conversation_id, as_of=clock, progress=progress)
+        if get_settings().answer_mode == "router":
+            answer = _route(
+                db,
+                text=text,
+                user_id=user_id,
+                conversation_id=conversation_id,
+                as_of=clock,
+                progress=progress,
+            )
+        else:
+            _emit(progress, "run.progress", {"stage": "planning", "run_id": str(run.id)})
+            answer = answer_with_model(
+                db,
+                text=text,
+                user_id=user_id,
+                conversation_id=conversation_id,
+                as_of=clock,
+                progress=progress,
+            )
         # Many capability paths return citations + rows but omit evidence[]. Fill before persist
         # so "See sources" always has linked records for table/chart answers.
         answer = enrich_answer_evidence(answer, db)
@@ -117,7 +137,7 @@ def run_question(
             "citations": answer.get("citations") or [],
             "conflicts": answer.get("conflicts") or [],
             "coverage": answer.get("coverage") or {},
-            "versions": {"data": 1, "knowledge": 1},
+            "versions": {"data": 1, "knowledge": 1, **(answer.get("versions") or {})},
             "warnings": answer.get("warnings") or [],
             "rows": answer.get("rows"),
             "data": answer.get("data"),
@@ -447,58 +467,6 @@ def _route(
                 for r in rows
                 for iid in r.get("contributing_inspection_ids", [])[:30]
             ],
-        }
-
-    # Heatmap before map: the word "heatmap" contains substring "map".
-    if "heatmap" in ql and "spill" in ql:
-        year = as_of.year
-        ym = re.search(r"\b(20\d{2})\b", q)
-        if ym:
-            year = int(ym.group(1))
-        data = queries.spill_heatmap(db, year=year)
-        return {
-            "kind": "heatmap",
-            "summary": f"{year} spill counts by area and month (formal corrections excluded).",
-            "data": data,
-            "rows": data.get("rows"),
-            "visuals": [
-                {
-                    "kind": "heatmap",
-                    "title": f"Spills by area × month ({year})",
-                    "dataset_ref": "rows",
-                    "fields": ["area_name", "months", "values", "total"],
-                }
-            ],
-            "evidence": [],
-        }
-
-    if re.search(r"\bmap\b", ql) and "spill" in ql:
-        end = as_of.date()
-        start = end - timedelta(days=90)
-        area = match_area(db, q)
-        area_name = area.name if area else None
-        if not area_name:
-            return {
-                "kind": "short_answer",
-                "summary": "Name the area for the spill map.",
-                "visuals": [],
-            }
-        data = queries.spill_map(db, area_name, start, end)
-        return {
-            "kind": "map",
-            "summary": f"{data.get('well_count', 0)} wells with effective spills in {area_name} over the last 90 days.",
-            "rows": data.get("pins"),
-            "data": data,
-            "visuals": [
-                {
-                    "kind": "map",
-                    "title": f"Spills — {area_name}",
-                    "dataset_ref": "rows",
-                    "fields": ["asset_id", "lat", "lon", "events"],
-                }
-            ],
-            "discussed_asset_ids": [p["asset_id"] for p in data.get("pins", [])],
-            "evidence": [],
         }
 
     if ("rules" in ql and "broken" in ql and well_match) or (

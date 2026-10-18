@@ -4,10 +4,7 @@ type Props = {
   className?: string;
 };
 
-/**
- * FieldSense brand mark: wellhead stem + sensing arcs (field intelligence).
- * Colors follow Wellhead tokens (copper / moss on pine).
- */
+/** Side-view pump jack. White tile so it stays readable on the black sidebar. */
 export function FieldSenseLogo({ markOnly = false, className = "" }: Props) {
   return (
     <span className={`inline-flex items-center gap-2.5 ${className}`}>
@@ -20,50 +17,41 @@ export function FieldSenseLogo({ markOnly = false, className = "" }: Props) {
         className="shrink-0"
         aria-hidden
       >
-        <rect width="40" height="40" rx="10" fill="#143832" />
-        {/* Sensing arcs */}
+        <rect width="40" height="40" rx="8" fill="#ffffff" />
+        <path d="M8 34h24" stroke="#0a0a0a" strokeWidth="1.6" strokeLinecap="round" />
         <path
-          d="M12 22c0-4.4 3.6-8 8-8s8 3.6 8 8"
-          stroke="#c46b2d"
-          strokeWidth="1.75"
-          strokeLinecap="round"
-          opacity="0.9"
-        />
-        <path
-          d="M15.5 22c0-2.5 2-4.5 4.5-4.5s4.5 2 4.5 4.5"
-          stroke="#1a7a6d"
-          strokeWidth="1.75"
+          d="M14.5 34 20 16.5 25.5 34"
+          stroke="#0a0a0a"
+          strokeWidth="1.6"
+          strokeLinejoin="round"
           strokeLinecap="round"
         />
-        {/* Wellhead / derrick stem */}
         <path
-          d="M20 10v18"
-          stroke="#f7f8f6"
+          d="M8.5 21.5 20 16.5 30 12"
+          stroke="#0a0a0a"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M30 12c3.2 1.2 4.2 5.2 2.4 8.2"
+          stroke="#0a0a0a"
           strokeWidth="2"
           strokeLinecap="round"
         />
-        <path
-          d="M15 14h10"
-          stroke="#f7f8f6"
-          strokeWidth="2"
-          strokeLinecap="round"
-        />
-        <circle cx="20" cy="22" r="2.25" fill="#c46b2d" />
-        <path
-          d="M17 30h6"
-          stroke="#f7f8f6"
-          strokeWidth="1.75"
-          strokeLinecap="round"
-          opacity="0.7"
-        />
+        <path d="M32.2 20.2v9.2" stroke="#0a0a0a" strokeWidth="1.5" strokeLinecap="round" />
+        <path d="M29.6 30.6h5.2" stroke="#0a0a0a" strokeWidth="2" strokeLinecap="round" />
+        <rect x="7.2" y="18.6" width="4.2" height="4.6" rx="0.6" fill="#0a0a0a" />
+        <circle cx="15.2" cy="27.5" r="2.3" stroke="#0a0a0a" strokeWidth="1.4" />
+        <path d="M15.2 27.5 12.6 25.2" stroke="#0a0a0a" strokeWidth="1.4" strokeLinecap="round" />
       </svg>
       {!markOnly ? (
         <span className="min-w-0 text-left leading-tight">
-          <span className="fs-brand-mark block font-display text-[1.35rem] font-semibold tracking-tight text-white">
+          <span className="fs-brand-mark block text-[15px] font-semibold tracking-tight text-white">
             FieldSense
           </span>
-          <span className="mt-0.5 block text-[11px] font-medium leading-snug text-stone/65">
-            Field intelligence for your wells
+          <span className="mt-0.5 block text-[11px] leading-snug text-white/70">
+            Field intelligence
           </span>
         </span>
       ) : null}

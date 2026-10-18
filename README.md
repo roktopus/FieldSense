@@ -15,15 +15,85 @@ Built for [FlytBase Hacktoberfest 2026](https://github.com/FlytBaseAILabs/flytba
 
 ---
 
+## Tech stack
+
+<img src="https://cdn.simpleicons.org/python" alt="Python" width="16" height="16" /> Python 3.12 API, <img src="https://cdn.simpleicons.org/react" alt="React" width="16" height="16" /> React 18 SPA, <img src="https://cdn.simpleicons.org/postgresql" alt="PostgreSQL" width="16" height="16" /> PostgreSQL 16. Gemma (`gemma-4-26b-a4b-it`) on the <img src="https://cdn.simpleicons.org/googlegemini" alt="Gemini" width="16" height="16" /> Gemini API is the answer model. <img src="https://cdn.simpleicons.org/docker" alt="Docker" width="16" height="16" /> Docker Compose runs the web, API, worker, and database containers.
+
+Icons are from [Simple Icons](https://simpleicons.org/). Libraries without a published mark are listed as text only.
+
+| Category | Libraries | Where they are used |
+|---|---|---|
+| Interface | <img src="https://cdn.simpleicons.org/react" alt="React" width="16" height="16" /> React 18, <img src="https://cdn.simpleicons.org/typescript" alt="TypeScript" width="16" height="16" /> TypeScript, <img src="https://cdn.simpleicons.org/tailwindcss" alt="Tailwind CSS" width="16" height="16" /> Tailwind CSS | The single-screen shell: Wells Bennett’s thread, the ask box, the lease plat, and the Questions toolbar |
+| Charts | Recharts | Answer visuals chosen from the row shape: bar, line, area, pie, scatter, and treemap |
+| Maps | <img src="https://cdn.simpleicons.org/leaflet" alt="Leaflet" width="16" height="16" /> Leaflet, React Leaflet, <img src="https://cdn.simpleicons.org/openstreetmap" alt="OpenStreetMap" width="16" height="16" /> OpenStreetMap | Spill maps and coordinate pins |
+| 3D | <img src="https://cdn.simpleicons.org/threedotjs" alt="Three.js" width="16" height="16" /> Three.js | Wells Bennett’s animated hard-hat mark on the home screen and on each reply |
+| Web delivery | <img src="https://cdn.simpleicons.org/vite" alt="Vite" width="16" height="16" /> Vite, <img src="https://cdn.simpleicons.org/nginx" alt="nginx" width="16" height="16" /> nginx | Vite builds the SPA. nginx serves it on port 5173 and proxies `/api/` to the API |
+| API | <img src="https://cdn.simpleicons.org/fastapi" alt="FastAPI" width="16" height="16" /> FastAPI, Uvicorn, <img src="https://cdn.simpleicons.org/pydantic" alt="Pydantic" width="16" height="16" /> Pydantic | HTTP routes, request bodies, and settings loaded from the environment |
+| Model | <img src="https://cdn.simpleicons.org/googlegemini" alt="Gemini" width="16" height="16" /> google-genai (Gemini API) | Wells Bennett’s tool-calling loop. HTTPX is only the optional OpenAI-compatible provider |
+| Data | <img src="https://cdn.simpleicons.org/sqlalchemy" alt="SQLAlchemy" width="16" height="16" /> SQLAlchemy 2, psycopg, <img src="https://cdn.simpleicons.org/postgresql" alt="PostgreSQL" width="16" height="16" /> PostgreSQL 16 (pgvector image) | Wells, inspections, notes, corrections, conversations, and the background job table |
+| Tests | <img src="https://cdn.simpleicons.org/pytest" alt="pytest" width="16" height="16" /> pytest, PyYAML | Domain and scenario tests. PyYAML loads the final-question harness files |
+
+---
+
 ## Architecture
 
-Modular monolith: React SPA → FastAPI → PostgreSQL 16 (pgvector + FTS), with a background worker for async jobs. Deterministic domain tools own the numbers; an optional LLM plans, explains, and picks visuals.
+Modular monolith: React SPA → FastAPI → PostgreSQL 16 (pgvector + FTS), with a background worker for async jobs. Gemma on the Gemini API plans tool calls, explains, and picks visuals. Deterministic domain tools own the numbers. Set `ANSWER_MODE=router` to use the offline phrase router instead.
 
 ![Asset Intelligence Copilot architecture](./docs/assets/architecture.png)
 
 *Source diagram from the official challenge dataset; vendored at [`docs/assets/architecture.png`](./docs/assets/architecture.png).*
 
-More detail: [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) · decisions in [`docs/decisions/`](./docs/decisions/).
+### How an answer is generated
+
+Product path is `ANSWER_MODE=llm` (default). The operator asks Wells Bennett; the API either returns a known capability answer immediately or runs Gemma in a tool loop. Numbers come from SQL tools, not from the model inventing figures.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Op as Operator
+    participant UI as React SPA
+    participant GW as nginx
+    participant API as FastAPI<br/>run_question
+    participant Cap as Capability fast path<br/>try_capability_route
+    participant Gemma as Gemma 4<br/>Gemini API
+    participant Tools as Domain tools<br/>SQLAlchemy
+    participant DB as PostgreSQL
+
+    Op->>UI: Ask / host question
+    UI->>GW: POST /api/v1/conversations/{id}/runs<br/>X-User-Id, X-Analysis-Clock
+    GW->>API: Proxy /api/
+    API->>DB: Create Run + user Message
+
+    alt Known question (spill map, gas odor, coverage, …)
+        API->>Cap: Match intent at analysis clock
+        Cap->>Tools: Query / assess
+        Tools->>DB: SQL on wells, inspections, notes
+        DB-->>Tools: Rows
+        Tools-->>Cap: Table / map / heatmap / refusal
+        Cap-->>API: Answer envelope
+    else Unmatched question
+        API->>Gemma: System prompt (Wells Bennett) + tools
+        loop Until submit_answer or limit
+            Gemma->>API: tool_call
+            API->>Tools: spill_map, downtime, …
+            Tools->>DB: SQL
+            DB-->>Tools: Grounded rows
+            Tools-->>API: result_handle + payload
+            API-->>Gemma: Tool JSON (numbers only from here)
+        end
+        Gemma-->>API: submit_answer summary + visual kinds
+    end
+
+    API->>API: enrich_answer_evidence
+    API->>DB: ResultSet + EvidenceItem rows
+    API-->>UI: Envelope (summary, visuals, rows, result_set_id)
+    UI->>UI: Render charts / OSM map / table<br/>See sources drawer
+    UI-->>Op: Wells Bennett reply
+```
+
+Optional offline path: when `ANSWER_MODE=router`, `run_question` skips Gemma and uses the phrase router (`_route`), which still calls the same capability tools and SQL. Evaluation harnesses set that mode so scores stay deterministic.
+
+Current behavior: [`docs/PRODUCT.md`](./docs/PRODUCT.md).
 
 ---
 
@@ -35,7 +105,7 @@ More detail: [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) · decisions in [`
 - **Evidence drawer** — claims cite resolvable inspection / maintenance / note IDs
 - **Shared vs private memory** — demo-user scoped chats; shared notes visible across users
 - **Corrections** — formal overrides preserve originals; analytics use the effective layer
-- **Works without an LLM** — intent router answers the analytical challenge queries offline
+- **Model answers** — the copilot calls your model; figures still come from tools. `ANSWER_MODE=router` is the optional offline path
 
 ---
 
@@ -80,7 +150,7 @@ Stop with `make down`. Logs: `make logs`.
 
 ### Demo walkthrough
 
-1. Choose **Who’s asking** (e.g. a field inspector) — demo identity only, not production sign-in.
+1. Choose **Who’s asking** — demo identity only, not production sign-in. **Wells Bennett** is the analyst in the thread. Host questions live in the **Questions** toolbar, not on the opening screen.
 2. Ask: *Which wells in Northeast Block 7 had the most downtime between 16 June and 16 October 2026, and why? Show a bar chart.*
 3. Open **View evidence** on the answer.
 4. Ask: *Is WELL-0001 producing oil right now? Show me its status card.*
@@ -95,7 +165,7 @@ Stop with `make down`. Logs: `make logs`.
 FieldSense/
 ├── backend/             # FastAPI, domain, analytics, ingestion, tests
 ├── frontend/            # Vite + React + Tailwind SPA
-├── docs/                # Architecture, ADRs
+├── docs/                # docs/PRODUCT.md
 ├── docker-compose.yml
 ├── Makefile
 └── .env.example
@@ -113,12 +183,14 @@ Copy [`.env.example`](./.env.example) → `.env`. Important variables:
 | `DATASET_PROFILE` | `sample` \| `test` (Makefile + harness gating) |
 | `APP_ENV` | `development` \| `staging` \| `production` |
 | `EVALUATION_AS_OF` | Analysis clock (`2026-10-16` sample / `2027-01-15` test) |
-| `MODEL_PROVIDER` / `MODEL_BASE_URL` / `MODEL_API_KEY` / `MODEL_NAME` | Optional OpenAI-compatible LLM |
+| `ANSWER_MODE` | `llm` (default) or `router` (optional offline phrase router) |
+| `MODEL_PROVIDER` / `MODEL_NAME` / `GEMINI_API_KEY` | Gemma on the Gemini API (`google`, `gemma-4-26b-a4b-it`). Key from [AI Studio](https://aistudio.google.com/apikey) |
+| `MODEL_BASE_URL` / `MODEL_API_KEY` | Only when `MODEL_PROVIDER=openai_compatible` |
 | `CORS_ORIGINS` | Allowed browser origins (never `*` in production) |
 | `SESSION_SECRET` | Session cookie signing (≥ 24 random chars in production) |
 | `POSTGRES_*` | Database credentials used by Compose |
 
-Analytics paths must work when the model provider is unavailable (degraded / router-only mode).
+`ANSWER_MODE=llm` with `MODEL_PROVIDER=google` will not answer until `GEMINI_API_KEY` and `MODEL_NAME` are set. It does not silently switch to the phrase router.
 
 Never commit `.env` or API keys.
 
@@ -166,7 +238,7 @@ The UI user picker sets a demo identity. The API trusts `X-User-Id` for the chal
 
 ## Design principles
 
-1. **Source authority** — Numbers from deterministic tools/SQL; the model plans and explains.
+1. **Source authority** — The model plans and explains. Numbers come from deterministic tools/SQL.
 2. **Immutable sources** — Dataset mounted read-only; imports are idempotent with content hashes.
 3. **Discover, don’t hardcode** — Well counts, areas, and types come from import.
 4. **Evidence always** — Factual claims cite resolvable record IDs.
@@ -174,7 +246,7 @@ The UI user picker sets a demo identity. The API trusts `X-User-Id` for the chal
 6. **Honest conflicts** — Informal notes never silently override measurements.
 7. **Eval hygiene** — Official Q&A fixtures stay in the test harness, not the knowledge base.
 
-See also [`docs/KNOWN_LIMITATIONS.md`](./docs/KNOWN_LIMITATIONS.md) and [`docs/QA_REPORT.md`](./docs/QA_REPORT.md) (what we QAed, what broke, how we fixed it).
+Limits and how answers are produced: [`docs/PRODUCT.md`](./docs/PRODUCT.md).
 
 ---
 
@@ -190,16 +262,7 @@ Read in order: `01-problem-statement.md` → `02-dataset-guide.md` → `03-evalu
 
 ## Documentation
 
-| Doc | Purpose |
-|---|---|
-| [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) | System design |
-| [`docs/KNOWN_LIMITATIONS.md`](./docs/KNOWN_LIMITATIONS.md) | Honest gaps |
-| [`docs/QA_REPORT.md`](./docs/QA_REPORT.md) | Q1–Q18 QA method, failures, fixes |
-| [`docs/algorithms/backend-algorithms.md`](./docs/algorithms/backend-algorithms.md) | How answers are computed |
-| [`docs/algorithms/frontend-algorithms.md`](./docs/algorithms/frontend-algorithms.md) | How the UI turns envelopes into trust |
-| [`docs/UI_GUIDELINES.md`](./docs/UI_GUIDELINES.md) | Theme, UX checklist, and friendly-copy rulebook |
-| [`docs/HOST_FINAL_QUESTIONS.md`](./docs/HOST_FINAL_QUESTIONS.md) | Official test-data Q1–Q11 for host submission |
-| [`docs/decisions/`](./docs/decisions/) | ADRs |
+[`docs/PRODUCT.md`](./docs/PRODUCT.md) — who Wells Bennett is, how an answer is made, and the limits that are still true.
 
 ---
 

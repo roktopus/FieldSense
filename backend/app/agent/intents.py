@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.agent.resolve import resolve_query, table_answer
+from app.agent.resolve import match_area, resolve_query, table_answer
+from app.analytics import queries
 from app.capabilities import analytics_ext, coverage, equipment, ops, regulator
 from app.capabilities.memory_prefs import (
     apply_list_prefs,
@@ -19,6 +20,61 @@ from app.capabilities.memory_prefs import (
 )
 from app.db import models
 from app.feedback.service import record_assertion
+
+
+def try_spatial_route(db: Session, q: str, ql: str, as_of: datetime) -> dict[str, Any] | None:
+    """Spill map and spill heatmap. These answers are the OpenStreetMap view."""
+    if "heatmap" in ql and "spill" in ql:
+        year = as_of.year
+        ym = re.search(r"\b(20\d{2})\b", q)
+        if ym:
+            year = int(ym.group(1))
+        data = queries.spill_heatmap(db, year=year)
+        return {
+            "kind": "heatmap",
+            "summary": f"{year} spill counts by area and month (formal corrections excluded).",
+            "data": data,
+            "rows": data.get("rows"),
+            "visuals": [
+                {
+                    "kind": "heatmap",
+                    "title": f"Spills by area × month ({year})",
+                    "dataset_ref": "rows",
+                    "fields": ["area_name", "months", "values", "total"],
+                }
+            ],
+            "evidence": [],
+        }
+
+    if re.search(r"\bmap\b", ql) and "spill" in ql:
+        end = as_of.date()
+        start = end - timedelta(days=90)
+        area = match_area(db, q)
+        area_name = area.name if area else None
+        if not area_name:
+            return {
+                "kind": "short_answer",
+                "summary": "Name the area for the spill map.",
+                "visuals": [],
+            }
+        data = queries.spill_map(db, area_name, start, end)
+        return {
+            "kind": "map",
+            "summary": f"{data.get('well_count', 0)} wells with effective spills in {area_name} over the last 90 days.",
+            "rows": data.get("pins"),
+            "data": data,
+            "visuals": [
+                {
+                    "kind": "map",
+                    "title": f"Spills — {area_name}",
+                    "dataset_ref": "rows",
+                    "fields": ["asset_id", "lat", "lon", "events"],
+                }
+            ],
+            "discussed_asset_ids": [p["asset_id"] for p in data.get("pins", [])],
+            "evidence": [],
+        }
+    return None
 
 
 def try_capability_route(
@@ -38,6 +94,10 @@ def try_capability_route(
         return coverage.answer_missing_pressure(db, as_of)
     if ("produced the most oil" in ql or "most oil in" in ql) and "spill" not in ql:
         return coverage.answer_missing_production_volume(db, resolved.year, as_of)
+
+    spatial = try_spatial_route(db, q, ql, as_of)
+    if spatial is not None:
+        return spatial
 
     # --- Private display prefs ---
     if ("sort them by area" in ql or "sort" in ql and "area" in ql and "well id" in ql) and (

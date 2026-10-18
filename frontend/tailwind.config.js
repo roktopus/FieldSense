@@ -5,33 +5,33 @@ export default {
     extend: {
       colors: {
         pine: {
-          DEFAULT: "#0b2420",
-          mid: "#143832",
-          soft: "#1e4a42",
+          DEFAULT: "#100e0c",
+          mid: "#1c1916",
+          soft: "#2a241e",
         },
         copper: {
-          DEFAULT: "#c46b2d",
-          deep: "#9a5222",
-          soft: "#f3e0d2",
+          DEFAULT: "#f4f1ec",
+          deep: "#d8d2c8",
+          soft: "#2a241e",
         },
         moss: {
-          DEFAULT: "#1a7a6d",
-          soft: "#d8ebe7",
+          DEFAULT: "#d8d2c8",
+          soft: "#1c2420",
         },
-        stone: "#e8ece9",
-        paper: "#f7f8f6",
-        ink: "#14201c",
-        mute: "#5c6b64",
-        accent: "#c46b2d",
-        sidebar: "#0b2420",
+        stone: "#14110e",
+        paper: "#1e1a16",
+        ink: "#f6f3ee",
+        mute: "#c2b8ac",
+        accent: "#0a0a0a",
+        sidebar: "#0a0a0a",
       },
       fontFamily: {
-        display: ['"Fraunces"', "Georgia", "serif"],
+        display: ['"Figtree"', "system-ui", "sans-serif"],
         body: ['"Figtree"', "system-ui", "sans-serif"],
       },
       boxShadow: {
-        lift: "0 1px 0 rgba(20,32,28,0.06), 0 8px 24px rgba(11,36,32,0.06)",
-        soft: "0 1px 0 rgba(20,32,28,0.05)",
+        lift: "none",
+        soft: "none",
       },
       keyframes: {
         "fs-enter": {

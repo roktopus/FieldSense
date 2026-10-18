@@ -245,7 +245,7 @@ def assess_well_compliance(db: Session, asset_id: str, as_of: datetime, lookback
                     "status": "pending_review",
                     "detail": "Planned shut-in not yet recorded in maintenance system",
                     "note_id": n.note_id,
-                    "ambiguity": "Q9 pre-work documentation — see docs/decisions",
+                    "ambiguity": "Q9 pre-work documentation is not a stored measurement",
                 }
             )
 
